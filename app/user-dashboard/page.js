@@ -1,17 +1,17 @@
 "use client"; 
 
 import { useRouter, useSearchParams } from "next/navigation"; 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react"; // 🟢 FIX 1: Suspense import kiya
 import { useSession } from "next-auth/react"; 
 import Navbar from "../../Components/Navbar"; 
 import Footer from "../../Components/Footer"; 
 
-export default function UserDashboard() {
+// 🟢 FIX 2: Original function ka naam badal kar DashboardContent kar diya
+function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams(); 
   const { data: session } = useSession();
   
-  // 🟢 FIX 1: Sirf string nikal rahe hain taaki Infinite Loop na bane
   const userName = session?.user?.name;
 
   const [activeTab, setActiveTab] = useState("home"); 
@@ -27,7 +27,6 @@ export default function UserDashboard() {
     }
   }, [searchParams]);
 
-  // 🟢 FIX 2: useEffect ab userName pe depend kar raha hai, user object par nahi
   useEffect(() => {
     if (!userName) return;
 
@@ -93,7 +92,6 @@ export default function UserDashboard() {
     localStorage.setItem(`saved_${userName}`, JSON.stringify(updatedCafes));
   };
 
-  // 🟢 FIX 3: Agar user ka naam nahi hai toh loading dikhao ya return null karo
   if (!userName) return null; 
 
   return (
@@ -231,6 +229,15 @@ export default function UserDashboard() {
       </div>
       <Footer />
     </div>
+  );
+}
+
+// 🟢 FIX 3: Naya component banaya jo originally export hoga aur Suspense provide karega
+export default function UserDashboard() {
+  return (
+    <Suspense fallback={<div style={{ textAlign: "center", padding: "100px", fontSize: "1.2rem", color: "#00bfa5", marginTop: "100px" }}>Loading your dashboard... 🌿</div>}>
+      <DashboardContent />
+    </Suspense>
   );
 }
 
