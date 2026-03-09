@@ -1,8 +1,9 @@
-"use client"; // Next.js ko batane ke liye ki ye client component hai
+"use client"; 
 
 import React, { useState } from "react";
-import Navbar from "../../components/Navbar";
-import Footer from "../../components/Footer";
+// 🟢 FIX: 'Components' ka 'C' capital kar diya taaki Vercel par crash na ho
+import Navbar from "../../Components/Navbar";
+import Footer from "../../Components/Footer";
 
 export default function Contact() {
   const [formData, setFormData] = useState({ name: "", email: "", subject: "", message: "" });
@@ -116,7 +117,6 @@ export default function Contact() {
   );
 }
 
-// 🟢 TERA ORIGINAL CSS STYLE
 const styles = {
   pageContainer: { minHeight: "100vh", backgroundColor: "#f8fafc", fontFamily: "'Inter', sans-serif" },
   contentWrapper: { maxWidth: "1100px", margin: "0 auto", padding: "120px 20px" },
