@@ -1,0 +1,139 @@
+body {
+  background: #f1f8f4;
+  font-family: Arial, sans-serif;
+}
+
+.auth-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+
+.auth-card {
+  background: white;
+  padding: 40px;
+  border-radius: 15px;
+  width: 350px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.auth-card h2 {
+  color: #2e7d32;
+}
+
+.auth-card input,
+.auth-card select {
+  width: 100%;
+  padding: 12px;
+  margin: 10px 0;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+}
+
+.auth-card button {
+  width: 100%;
+  padding: 12px;
+  background: #2e7d32;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  margin-top: 10px;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+.auth-card button:hover {
+  background: #1b5e20;
+}
+
+.link {
+  color: #2e7d32;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.dashboard-container {
+  text-align: center;
+  padding: 50px;
+}
+
+.dashboard-card {
+  background: white;
+  padding: 25px;
+  margin: 20px auto;
+  width: 400px;
+  border-radius: 15px;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08);
+}
+
+.dashboard-card h2,
+.dashboard-card h3 {
+  color: #2e7d32;
+}
+
+.dashboard-card button {
+  display: block;
+  width: 100%;
+  margin: 10px 0;
+  padding: 10px;
+  background: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 8px;
+}
+
+.logout {
+  margin-top: 20px;
+  background: #c62828;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 8px;
+}
+
+.dashboard-card button {
+  display: block !important;
+}
+
+button {
+  display: block;
+}
+
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #2e7d32;
+  padding: 12px 30px;
+  color: white;
+}
+
+.nav-left {
+  font-size: 20px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.nav-right {
+  display: flex;           /* 🔥 THIS FIXES STACKING */
+  align-items: center;
+  gap: 12px;               /* spacing between items */
+}
+
+.nav-right button {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  background: #4caf50;
+  color: white;
+  cursor: pointer;
+}
+
+.welcome {
+  font-weight: 500;
+}
+
+.logout-btn {
+  background: #c62828;
+}

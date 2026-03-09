@@ -1,0 +1,177 @@
+"use client"; 
+
+import React, { useState } from "react";
+import { useParams, useRouter } from "next/navigation"; 
+import Navbar from "../../../Components/Navbar"; 
+import Footer from "../../../Components/Footer"; 
+
+const allCafes = [
+  { id: 1, name: "Green Leaf Cafe", location: "Dehradun", lat: 30.3165, lng: 78.0322, features: ["Vegan Options", "Composting", "Solar Powered"], score: 92, rating: 4.8, distance: "1.2 km", surplus: true, image: "https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&q=80&w=1200", desc: "A pioneer in sustainable dining with 100% compostable packaging and locally sourced organic ingredients. We believe in zero waste and high taste.", openTime: "08:00 AM - 10:00 PM" },
+  { id: 2, name: "Earth Kitchen", location: "Delhi", lat: 28.6139, lng: 77.2090, features: ["Organic", "Zero Plastic"], score: 88, rating: 4.6, distance: "2.8 km", surplus: false, image: "https://images.unsplash.com/photo-1559305616-3f99cd43e353?q=80&w=735&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D", desc: "Farm-to-table restaurant supporting local farmers and significantly reducing food miles.", openTime: "09:00 AM - 11:00 PM" },
+  { id: 3, name: "Sustainable Sips", location: "Bangalore", lat: 12.9716, lng: 77.5946, features: ["Vegan Options", "Reusable Packaging"], score: 95, rating: 4.7, distance: "0.8 km", surplus: true, image: "https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&q=80&w=1200", desc: "A cozy cafe with excellent coffee and a strict commitment to reusable packaging and zero waste.", openTime: "07:00 AM - 09:00 PM" },
+  { id: 4, name: "The Roast Cafe", location: "Chandigarh", lat: 30.7333, lng: 76.7794, features: ["Vegan Options", "Composting"], score: 81, rating: 3.9, distance: "1.5 km", surplus: true, image: "https://plus.unsplash.com/premium_photo-1674327105074-46dd8319164b?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D", desc: "A small and comfortable café in Chandigarh known for its great coffee. The Roast Cafe focuses on being eco-friendly by offering vegan food options, composting waste, and using reusable packaging to reduce waste.", openTime: "08:00 AM - 11:00 PM" },
+  { id: 5, name: "Himalayan Roots", location: "Roorkee", lat: 29.8543, lng: 77.8880, features: ["Organic", "Zero Plastic"], score: 85, rating: 4.5, distance: "3.2 km", surplus: false, image: "https://images.unsplash.com/photo-1497935586351-b67a49e012bf?auto=format&fit=crop&q=80&w=600", desc: "A peaceful spot offering organic teas and locally sourced snacks, completely free from single-use plastics.", openTime: "10:00 AM - 08:00 PM" },
+  { id: 6, name: "Zero Waste Bites", location: "Mumbai", lat: 19.0760, lng: 72.8777, features: ["Vegan Options", "Surplus Available"], score: 90, rating: 4.9, distance: "5.0 km", surplus: true, image: "https://images.unsplash.com/photo-1511920170033-f8396924c348?auto=format&fit=crop&q=80&w=600", desc: "Mumbai's premier zero-waste cafe, fighting food waste every day by distributing surplus to the needy.", openTime: "09:00 AM - 12:00 AM" },
+];
+
+export default function CafeDetail() {
+  const params = useParams(); 
+  const router = useRouter(); 
+  
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isClaimed, setIsClaimed] = useState(false);
+
+  const cafeId = params?.id;
+  const cafe = allCafes.find(c => c.id.toString() === cafeId);
+
+  const handleConfirmClaim = () => setIsClaimed(true); 
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setTimeout(() => setIsClaimed(false), 300); 
+  };
+
+  const handleGetDirections = () => {
+    if (cafe && cafe.lat && cafe.lng) {
+      const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${cafe.lat},${cafe.lng}`;
+      window.open(mapsUrl, '_blank'); 
+    } else if (cafe) {
+      const query = encodeURIComponent(`${cafe.name}, ${cafe.location}`);
+      const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${query}`;
+      window.open(mapsUrl, '_blank'); 
+    }
+  };
+
+  if (!cafe) {
+    return (
+        <div style={styles.pageContainer}>
+            <Navbar />
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', marginTop: '80px' }}>
+                <h2>Oops! Cafe details not found. 🌿</h2>
+                <button onClick={() => router.push("/")} style={styles.primaryBtn}>Go back Home</button>
+            </div>
+            <Footer />
+        </div>
+    )
+  }
+
+  return (
+    <div style={styles.pageContainer}>
+      <Navbar />
+      <div style={styles.contentWrapper}>
+        <button onClick={() => router.back()} style={styles.backBtn}>← Back to Results</button>
+        <div style={{ ...styles.heroBanner, backgroundImage: `url(${cafe.image})` }}>
+          <div style={styles.overlay}></div>
+          <div style={styles.bannerContent}>
+            <div style={styles.badgeWrapper}>
+              
+              {cafe.surplus && (
+                <span 
+                  onClick={() => router.push(`/surplus-alerts/${cafe.id}`)} 
+                  style={{ ...styles.surplusBadge, cursor: "pointer" }}
+                  title={`View live alerts for ${cafe.name}`}
+                >
+                  🍱 Surplus Available
+                </span>
+              )}
+              
+              <span style={styles.scoreBadge}>🌱 AI Score: {cafe.score}/100</span>
+            </div>
+            <h1 style={styles.cafeName}>{cafe.name}</h1>
+            <p style={styles.cafeLocation}>📍 {cafe.location} • ⭐ {cafe.rating} ({cafe.distance})</p>
+          </div>
+        </div>
+
+        <div style={styles.gridContainer}>
+          <div style={styles.mainInfo}>
+            <h2 style={styles.sectionTitle}>About this Cafe</h2>
+            <p style={styles.description}>{cafe.desc}</p>
+            <h3 style={styles.subTitle}>Eco-Friendly Features</h3>
+            <div style={styles.featuresList}>
+              {cafe.features.map((feature, index) => <span key={index} style={styles.featureTag}>✓ {feature}</span>)}
+            </div>
+          </div>
+
+          <div style={styles.actionCard}>
+            <h3 style={styles.subTitle}>Plan Your Visit</h3>
+            <p style={{ color: "#64748b", marginBottom: "20px" }}>🕒 Hours: {cafe.openTime}</p>
+            
+            <button style={styles.primaryBtn} onClick={handleGetDirections}>🗺️ Get Directions</button>
+            
+            {cafe.surplus ? (
+              <div style={styles.surplusBox}>
+                <h4 style={{ margin: "0 0 10px 0", color: "#b45309" }}>Surplus Food Alert!</h4>
+                <p style={{ margin: "0 0 15px 0", fontSize: "0.9rem", color: "#d97706" }}>Grab high-quality leftover food at 50% off and help prevent food waste.</p>
+                <button style={styles.surplusBtn} onClick={() => router.push(`/surplus-alerts/${cafe.id}`)}>Claim Surplus Now</button>
+              </div>
+            ) : (
+              <p style={styles.noSurplusText}>No surplus food available today.</p>
+            )}
+          </div>
+        </div>
+      </div>
+      <Footer />
+
+      {/* MODAL (Optional if you want to keep the local claim modal, otherwise you can remove this block) */}
+      {isModalOpen && (
+        <div style={styles.modalOverlay}>
+          <div style={styles.modalBox}>
+            {!isClaimed ? (
+              <>
+                <div style={styles.modalIcon}>🍱</div>
+                <h2 style={styles.modalTitle}>Confirm Your Claim</h2>
+                <p style={styles.modalText}>Are you sure you want to claim the surplus food from <strong>{cafe.name}</strong> at a 50% discount?</p>
+                <div style={styles.modalActions}>
+                  <button onClick={closeModal} style={styles.cancelBtn}>Cancel</button>
+                  <button onClick={handleConfirmClaim} style={styles.confirmBtn}>Yes, Claim It</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={styles.modalIconSuccess}>🎉</div>
+                <h2 style={styles.modalTitle}>Claim Successful!</h2>
+                <p style={styles.modalText}>Your order is reserved at <strong>{cafe.name}</strong>. Show your confirmation email at the counter within the next hour.</p>
+                <button onClick={closeModal} style={styles.successBtn}>Done</button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const styles = {
+  pageContainer: { minHeight: "100vh", display: "flex", flexDirection: "column", backgroundColor: "#f8fafc", fontFamily: "'Inter', sans-serif" },
+  contentWrapper: { flex: 1, maxWidth: "1200px", margin: "0 auto", padding: "100px 20px 60px 20px", width: "100%", boxSizing: "border-box" },
+  backBtn: { background: "none", border: "none", color: "#64748b", fontSize: "1rem", cursor: "pointer", marginBottom: "20px", fontWeight: "bold", padding: 0 },
+  heroBanner: { height: "400px", borderRadius: "24px", backgroundSize: "cover", backgroundPosition: "center", position: "relative", overflow: "hidden", display: "flex", alignItems: "flex-end", boxShadow: "0 20px 40px rgba(0,0,0,0.1)" },
+  overlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, background: "linear-gradient(to bottom, rgba(0,0,0,0.1), rgba(0,0,0,0.8))" },
+  bannerContent: { position: "relative", zIndex: 1, padding: "40px", width: "100%" },
+  badgeWrapper: { display: "flex", gap: "10px", marginBottom: "15px", flexWrap: "wrap" },
+  surplusBadge: { backgroundColor: "#f5a623", color: "white", padding: "6px 14px", borderRadius: "30px", fontSize: "0.9rem", fontWeight: "bold", transition: "transform 0.2s" },
+  scoreBadge: { backgroundColor: "#00bfa5", color: "white", padding: "6px 14px", borderRadius: "30px", fontSize: "0.9rem", fontWeight: "bold" },
+  cafeName: { color: "white", fontSize: "3rem", fontWeight: "800", margin: "0 0 10px 0", letterSpacing: "-1px" },
+  cafeLocation: { color: "#e2e8f0", fontSize: "1.1rem", margin: 0 },
+  gridContainer: { display: "grid", gridTemplateColumns: "2fr 1fr", gap: "40px", marginTop: "40px", alignItems: "start" },
+  mainInfo: { backgroundColor: "white", padding: "40px", borderRadius: "24px", boxShadow: "0 10px 30px rgba(0,0,0,0.05)" },
+  sectionTitle: { color: "#1e293b", fontSize: "1.8rem", marginTop: 0, marginBottom: "20px", fontWeight: "800" },
+  description: { color: "#475569", fontSize: "1.1rem", lineHeight: "1.8", marginBottom: "30px" },
+  subTitle: { color: "#1e293b", fontSize: "1.3rem", marginBottom: "15px", fontWeight: "700" },
+  featuresList: { display: "flex", flexWrap: "wrap", gap: "12px" },
+  featureTag: { backgroundColor: "#f1f5f9", color: "#334155", padding: "8px 16px", borderRadius: "8px", fontSize: "0.95rem", fontWeight: "600" },
+  actionCard: { backgroundColor: "white", padding: "30px", borderRadius: "24px", boxShadow: "0 10px 30px rgba(0,0,0,0.05)", position: "sticky", top: "100px" },
+  primaryBtn: { width: "100%", backgroundColor: "#1e293b", color: "white", border: "none", padding: "14px", borderRadius: "12px", fontSize: "1.05rem", fontWeight: "bold", cursor: "pointer", marginBottom: "20px", transition: "background 0.2s" },
+  surplusBox: { backgroundColor: "#fffbeb", border: "1px solid #fde68a", padding: "20px", borderRadius: "16px", marginTop: "10px" },
+  surplusBtn: { width: "100%", backgroundColor: "#f5a623", color: "white", border: "none", padding: "14px", borderRadius: "12px", fontSize: "1.05rem", fontWeight: "bold", cursor: "pointer", boxShadow: "0 4px 10px rgba(245, 166, 35, 0.3)", transition: "transform 0.1s" },
+  noSurplusText: { textAlign: "center", color: "#94a3b8", fontSize: "0.9rem", margin: "20px 0 0 0", padding: "15px", backgroundColor: "#f8fafc", borderRadius: "12px" },
+  modalOverlay: { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 },
+  modalBox: { backgroundColor: "white", padding: "40px", borderRadius: "24px", width: "90%", maxWidth: "450px", textAlign: "center", boxShadow: "0 25px 50px rgba(0,0,0,0.15)", animation: "fadeIn 0.3s ease" },
+  modalIcon: { fontSize: "3rem", marginBottom: "15px" },
+  modalIconSuccess: { fontSize: "3rem", marginBottom: "15px", color: "#00bfa5" },
+  modalTitle: { margin: "0 0 15px 0", color: "#1e293b", fontSize: "1.6rem", fontWeight: "800" },
+  modalText: { color: "#64748b", lineHeight: "1.6", marginBottom: "30px", fontSize: "1.05rem" },
+  modalActions: { display: "flex", gap: "15px", justifyContent: "center" },
+  cancelBtn: { flex: 1, backgroundColor: "#f1f5f9", color: "#475569", border: "none", padding: "12px", borderRadius: "12px", fontSize: "1rem", fontWeight: "bold", cursor: "pointer" },
+  confirmBtn: { flex: 1, backgroundColor: "#f5a623", color: "white", border: "none", padding: "12px", borderRadius: "12px", fontSize: "1rem", fontWeight: "bold", cursor: "pointer", boxShadow: "0 4px 10px rgba(245, 166, 35, 0.3)" },
+  successBtn: { width: "100%", backgroundColor: "#00bfa5", color: "white", border: "none", padding: "14px", borderRadius: "12px", fontSize: "1.05rem", fontWeight: "bold", cursor: "pointer", boxShadow: "0 4px 10px rgba(0, 191, 165, 0.3)" }
+};
