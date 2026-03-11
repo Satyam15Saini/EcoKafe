@@ -3,7 +3,8 @@
 EcoKafe is a modern, AI-driven web application designed to connect eco-conscious consumers with sustainable dining options. It features smart cafe recommendations, a real-time surplus food marketplace to combat food waste, and secure role-based portals for users, cafe owners, and administrators.
 
 
-## 🚀 Live Demo
+
+## 🚀 Live Demo 
 **[Visit EcoKafe Live](https://eco-kafe-ac4i.vercel.app/)** *(Deployed on Vercel)*
 
 
