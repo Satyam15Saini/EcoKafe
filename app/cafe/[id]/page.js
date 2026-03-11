@@ -1,13 +1,14 @@
 "use client"; 
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation"; 
+import { useSession } from "next-auth/react"; // 🟢 FIX: Session import kiya taaki pata chale kis user ne rate kiya hai
 import Navbar from "../../../Components/Navbar"; 
 import Footer from "../../../Components/Footer"; 
 
 const allCafes = [
   { id: 1, name: "Green Leaf Cafe", location: "Dehradun", lat: 30.3165, lng: 78.0322, features: ["Vegan Options", "Composting", "Solar Powered"], score: 92, rating: 4.8, distance: "1.2 km", surplus: true, image: "https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&q=80&w=1200", menuImage: "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&q=80&w=800", desc: "A pioneer in sustainable dining with 100% compostable packaging and locally sourced organic ingredients.", openTime: "08:00 AM - 10:00 PM" },
-  { id: 2, name: "Earth Kitchen", location: "Delhi", lat: 28.6139, lng: 77.2090, features: ["Organic", "Zero Plastic"], score: 88, rating: 4.6, distance: "2.8 km", surplus: false, image: "https://images.unsplash.com/photo-1498837167922-41c16b513715?auto=format&fit=crop&q=80&w=1200", menuImage: "https://images.unsplash.com/photo-1544148103-0773bf10d330?auto=format&fit=crop&q=80&w=800", desc: "Farm-to-table restaurant supporting local farmers and significantly reducing food miles.", openTime: "09:00 AM - 11:00 PM" },
+  { id: 2, name: "Earth Kitchen", location: "Delhi", lat: 28.6139, lng: 77.2090, features: ["Organic", "Zero Plastic"], score: 88, rating: 4.6, distance: "2.8 km", surplus: false, image: "https://images.unsplash.com/photo-1525610553991-2bede1a236e2?auto=format&fit=crop&q=80&w=1200", menuImage: "https://images.unsplash.com/photo-1544148103-0773bf10d330?auto=format&fit=crop&q=80&w=800", desc: "Farm-to-table restaurant supporting local farmers and significantly reducing food miles.", openTime: "09:00 AM - 11:00 PM" },
   { id: 3, name: "Sustainable Sips", location: "Bangalore", lat: 12.9716, lng: 77.5946, features: ["Vegan Options", "Reusable Packaging"], score: 95, rating: 4.7, distance: "0.8 km", surplus: true, image: "https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&q=80&w=1200", menuImage: "https://images.unsplash.com/photo-1600565193348-f74bd3c7ccdf?auto=format&fit=crop&q=80&w=800", desc: "A cozy cafe with excellent coffee and a strict commitment to reusable packaging and zero waste.", openTime: "07:00 AM - 09:00 PM" },
   { id: 4, name: "The Roast Cafe", location: "Chandigarh", lat: 30.7333, lng: 76.7794, features: ["Vegan Options", "Composting"], score: 81, rating: 3.9, distance: "1.5 km", surplus: true, image: "https://plus.unsplash.com/premium_photo-1674327105074-46dd8319164b?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D", menuImage: "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&q=80&w=800", desc: "A small and comfortable café in Chandigarh known for its great coffee.", openTime: "08:00 AM - 11:00 PM" },
   { id: 5, name: "Himalayan Roots", location: "Roorkee", lat: 29.8543, lng: 77.8880, features: ["Organic", "Zero Plastic"], score: 85, rating: 4.5, distance: "3.2 km", surplus: false, image: "https://images.unsplash.com/photo-1497935586351-b67a49e012bf?auto=format&fit=crop&q=80&w=600", menuImage: "https://images.unsplash.com/photo-1544148103-0773bf10d330?auto=format&fit=crop&q=80&w=800", desc: "A peaceful spot offering organic teas and locally sourced snacks.", openTime: "10:00 AM - 08:00 PM" },
@@ -17,7 +18,9 @@ const allCafes = [
 export default function CafeDetail() {
   const params = useParams(); 
   const router = useRouter(); 
-  
+  const { data: session } = useSession(); 
+  const userName = session?.user?.name;
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isClaimed, setIsClaimed] = useState(false);
   
@@ -29,6 +32,56 @@ export default function CafeDetail() {
 
   const cafeId = params?.id;
   const cafe = allCafes.find(c => c.id.toString() === cafeId);
+
+  // 🟢 NAYA: Rating States
+  const [ratingHover, setRatingHover] = useState(0);
+  const [userRating, setUserRating] = useState(0);
+  const [cafeStats, setCafeStats] = useState({ rating: cafe?.rating || 0, totalReviews: 12 });
+
+  // 🟢 NAYA: Load ratings from LocalStorage when page opens
+  useEffect(() => {
+    if (!cafe) return;
+    const storedRatings = JSON.parse(localStorage.getItem(`ratings_${cafe.id}`)) || [];
+    
+    if (storedRatings.length > 0) {
+      const newTotalReviews = 12 + storedRatings.length;
+      const userRatingsSum = storedRatings.reduce((sum, r) => sum + r.rating, 0);
+      const baseRatingsSum = cafe.rating * 12; // Base dummy reviews
+      const newAverage = (baseRatingsSum + userRatingsSum) / newTotalReviews;
+      
+      setCafeStats({ rating: newAverage.toFixed(1), totalReviews: newTotalReviews });
+
+      if (userName) {
+        const existingRating = storedRatings.find(r => r.username === userName);
+        if (existingRating) setUserRating(existingRating.rating);
+      }
+    }
+  }, [cafe, userName]);
+
+  // 🟢 NAYA: Submit Rating Function
+  const handleRate = (rateValue) => {
+    if (!userName) {
+      alert("Please log in to rate this cafe! 🌿");
+      router.push("/login");
+      return;
+    }
+    if (userRating > 0) return; // Already rated
+
+    const storedRatings = JSON.parse(localStorage.getItem(`ratings_${cafe.id}`)) || [];
+    const newRatings = [...storedRatings, { username: userName, rating: rateValue }];
+    localStorage.setItem(`ratings_${cafe.id}`, JSON.stringify(newRatings));
+
+    setUserRating(rateValue);
+
+    // Update Live Average
+    const newTotalReviews = 12 + newRatings.length;
+    const userRatingsSum = newRatings.reduce((sum, r) => sum + r.rating, 0);
+    const baseRatingsSum = cafe.rating * 12;
+    const newAverage = (baseRatingsSum + userRatingsSum) / newTotalReviews;
+    
+    setCafeStats({ rating: newAverage.toFixed(1), totalReviews: newTotalReviews });
+    alert(`Thank you! You rated ${cafe.name} ${rateValue} Stars. ⭐`);
+  };
 
   const handleConfirmClaim = () => setIsClaimed(true); 
   const closeModal = () => {
@@ -74,7 +127,7 @@ export default function CafeDetail() {
 
     const options = {
       key: "rzp_test_SO7JF1hwSrLE2x", 
-      amount: "10000", // 🟢 FIX: Price updated to ₹100 (10000 paise)
+      amount: "10000", 
       currency: "INR",
       name: "EcoKafe Booking",
       description: `Table Reservation at ${cafe.name}`,
@@ -88,7 +141,7 @@ export default function CafeDetail() {
         email: "user@ecokafe.com",
         contact: "9999999999",
       },
-      hidden: { // 🟢 FIX: Ye contact popup bypass karke seedha payment section open karega
+      hidden: {
         contact: true,
         email: true
       },
@@ -132,7 +185,8 @@ export default function CafeDetail() {
               <span style={styles.scoreBadge}>🌱 AI Score: {cafe.score}/100</span>
             </div>
             <h1 style={styles.cafeName}>{cafe.name}</h1>
-            <p style={styles.cafeLocation}>📍 {cafe.location} • ⭐ {cafe.rating} ({cafe.distance})</p>
+            {/* 🟢 FIX: Rating ab dynamically stats se aayegi */}
+            <p style={styles.cafeLocation}>📍 {cafe.location} • ⭐ {cafeStats.rating} ({cafeStats.totalReviews} Reviews) • ({cafe.distance})</p>
           </div>
         </div>
 
@@ -144,6 +198,34 @@ export default function CafeDetail() {
             <div style={styles.featuresList}>
               {cafe.features.map((feature, index) => <span key={index} style={styles.featureTag}>✓ {feature}</span>)}
             </div>
+
+            {/* 🟢 NAYA: Rating Section UI */}
+            <div style={styles.ratingSection}>
+              <h3 style={{ margin: "0 0 10px 0", color: "#1e293b" }}>Rate Your Experience</h3>
+              <div style={styles.starsContainer}>
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <span
+                    key={star}
+                    style={{
+                      ...styles.star,
+                      color: star <= (ratingHover || userRating) ? "#f5a623" : "#cbd5e1",
+                      cursor: userRating ? "default" : "pointer"
+                    }}
+                    onMouseEnter={() => !userRating && setRatingHover(star)}
+                    onMouseLeave={() => !userRating && setRatingHover(0)}
+                    onClick={() => handleRate(star)}
+                  >
+                    ★
+                  </span>
+                ))}
+              </div>
+              <p style={styles.reviewText}>
+                {userRating 
+                  ? `Thank you! You rated this cafe ${userRating} stars.` 
+                  : "Click a star to submit your rating."}
+              </p>
+            </div>
+
           </div>
 
           <div style={styles.actionCard}>
@@ -166,7 +248,6 @@ export default function CafeDetail() {
               />
               <div style={{ display: "flex", gap: "10px", marginTop: "10px", marginBottom: "15px" }}>
                 
-                {/* 🟢 FIX: Updated Timings (10 AM to 10 PM) */}
                 <select value={bookingTime} onChange={(e) => setBookingTime(e.target.value)} style={styles.inputField}>
                   <option value="">Time Slot</option>
                   <option value="10:00 AM">10:00 AM</option>
@@ -265,6 +346,12 @@ const styles = {
   featureTag: { backgroundColor: "#f1f5f9", color: "#334155", padding: "8px 16px", borderRadius: "8px", fontSize: "0.95rem", fontWeight: "600" },
   actionCard: { backgroundColor: "white", padding: "30px", borderRadius: "24px", boxShadow: "0 10px 30px rgba(0,0,0,0.05)", position: "sticky", top: "100px" },
   
+  // 🟢 NAYA: Rating styles
+  ratingSection: { backgroundColor: "#f8fafc", padding: "25px", borderRadius: "16px", marginTop: "30px", border: "1px dashed #cbd5e1", textAlign: "center" },
+  starsContainer: { display: "flex", gap: "8px", justifyContent: "center", fontSize: "2.5rem", marginBottom: "10px" },
+  star: { transition: "color 0.2s, transform 0.2s" },
+  reviewText: { color: "#64748b", fontSize: "0.95rem", margin: 0 },
+
   primaryBtn: { backgroundColor: "#1e293b", color: "white", border: "none", padding: "12px", borderRadius: "10px", fontSize: "1rem", fontWeight: "bold", cursor: "pointer", transition: "background 0.2s" },
   secondaryBtn: { backgroundColor: "#f1f5f9", color: "#334155", border: "1px solid #cbd5e1", padding: "12px", borderRadius: "10px", fontSize: "1rem", fontWeight: "bold", cursor: "pointer", transition: "all 0.2s" },
   
