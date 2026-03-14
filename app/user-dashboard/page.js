@@ -1,16 +1,16 @@
 "use client"; 
 
 import { useRouter, useSearchParams } from "next/navigation"; 
-import { useState, useEffect, Suspense } from "react"; // 🟢 FIX 1: Suspense import kiya
+import { useState, useEffect, Suspense } from "react"; 
 import { useSession } from "next-auth/react"; 
 import Navbar from "../../Components/Navbar"; 
 import Footer from "../../Components/Footer"; 
 
-// 🟢 FIX 2: Original function ka naam badal kar DashboardContent kar diya
 function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams(); 
-  const { data: session } = useSession();
+  // 🟢 NAYA FIX: status extract kiya auth check ke liye
+  const { data: session, status } = useSession();
   
   const userName = session?.user?.name;
 
@@ -19,6 +19,17 @@ function DashboardContent() {
   const [savedCafes, setSavedCafes] = useState([]);
   const [history, setHistory] = useState([]);
   const [availableDeals, setAvailableDeals] = useState([]);
+
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedDeal, setSelectedDeal] = useState(null);
+  const [surplusQuantity, setSurplusQuantity] = useState(1);
+
+  // 🟢 NAYA FIX: Security Guard (Redirect unauthenticated users)
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.push("/login");
+    }
+  }, [status, router]);
 
   useEffect(() => {
     const tabParam = searchParams.get("tab");
@@ -48,42 +59,79 @@ function DashboardContent() {
         const ownerName = key.split("_")[1];
         const ownerDeals = JSON.parse(localStorage.getItem(key)) || [];
         ownerDeals.forEach(deal => {
-          realDeals.push({ ...deal, cafeName: `${ownerName.toUpperCase()}'s Cafe` });
+          realDeals.push({ ...deal, cafeName: `${ownerName.toUpperCase()}'s Cafe`, quantity: deal.quantity || 5 });
         });
       }
     }
 
     if (realDeals.length === 0) {
       realDeals = [
-        { id: 901, item: "Vegan Wrap (2 left)", discount: "40% OFF", cafeName: "Green Leaf Cafe" },
-        { id: 902, item: "Surplus Muffins", discount: "50% OFF", cafeName: "Eco Brew Hub" }
+        { id: 901, item: "Vegan Wrap", discount: "40% OFF", cafeName: "Green Leaf Cafe", quantity: 2, time: "10:30 AM" },
+        { id: 902, item: "Surplus Muffins", discount: "50% OFF", cafeName: "Eco Brew Hub", quantity: 5, time: "11:15 AM" }
       ];
     }
     setAvailableDeals(realDeals);
 
   }, [userName]);
 
-  const handleClaimDeal = (deal) => {
-    if (window.confirm(`Do you want to claim ${deal.item} from ${deal.cafeName}?`)) {
-      setAvailableDeals(availableDeals.filter(d => d.id !== deal.id));
+  const openClaimModal = (deal) => {
+    setSelectedDeal(deal);
+    setSurplusQuantity(1);
+    setIsModalOpen(true);
+  };
 
-      const newHistoryItem = {
-        id: Date.now(),
-        item: deal.item,
-        cafe: deal.cafeName,
-        date: new Date().toLocaleDateString(),
-        pointsEarned: 50
-      };
-      const updatedHistory = [newHistoryItem, ...history];
-      setHistory(updatedHistory);
-      localStorage.setItem(`history_${userName}`, JSON.stringify(updatedHistory));
+  const handleConfirmClaim = () => {
+    if (!selectedDeal) return;
 
-      const newPoints = points + 50;
-      setPoints(newPoints);
-      localStorage.setItem(`points_${userName}`, newPoints);
+    const claimedQty = surplusQuantity;
+    const pointsEarned = claimedQty * 50;
 
-      alert("🎉 Deal Claimed Successfully! +50 Eco Points earned.");
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith("deals_")) {
+        let ownerDeals = JSON.parse(localStorage.getItem(key)) || [];
+        const dealIndex = ownerDeals.findIndex(d => d.id === selectedDeal.id);
+        
+        if (dealIndex !== -1) {
+          let currentQty = parseInt(ownerDeals[dealIndex].quantity) || 5;
+          currentQty -= claimedQty;
+          
+          if (currentQty <= 0) {
+            ownerDeals.splice(dealIndex, 1); 
+          } else {
+            ownerDeals[dealIndex].quantity = currentQty; 
+          }
+          localStorage.setItem(key, JSON.stringify(ownerDeals));
+          break;
+        }
+      }
     }
+
+    setAvailableDeals(prevDeals => prevDeals.map(d => {
+      if (d.id === selectedDeal.id) {
+        return { ...d, quantity: d.quantity - claimedQty };
+      }
+      return d;
+    }).filter(d => d.quantity > 0));
+
+    const newHistoryItem = {
+      id: Date.now(),
+      item: `${claimedQty}x ${selectedDeal.item}`, 
+      cafe: selectedDeal.cafeName,
+      date: new Date().toLocaleDateString(),
+      pointsEarned: pointsEarned
+    };
+    const updatedHistory = [newHistoryItem, ...history];
+    setHistory(updatedHistory);
+    localStorage.setItem(`history_${userName}`, JSON.stringify(updatedHistory));
+
+    const newPoints = points + pointsEarned;
+    setPoints(newPoints);
+    localStorage.setItem(`points_${userName}`, newPoints);
+
+    alert(`🎉 Success! You saved ${claimedQty} portion(s) and earned +${pointsEarned} Eco Points.`);
+    setIsModalOpen(false);
+    setSelectedDeal(null);
   };
 
   const handleRemoveCafe = (cafeId) => {
@@ -92,7 +140,8 @@ function DashboardContent() {
     localStorage.setItem(`saved_${userName}`, JSON.stringify(updatedCafes));
   };
 
-  if (!userName) return null; 
+  // 🟢 NAYA FIX: Jab tak session verify na ho, screen par error na dikhe
+  if (status === "loading" || !userName) return null;
 
   return (
     <div style={styles.pageContainer}>
@@ -127,7 +176,7 @@ function DashboardContent() {
                   <span style={styles.arrow}>➔</span>
                 </button>
 
-                <button style={styles.menuItem} onClick={() => router.push("/user-dashboard?tab=deals")}>
+                <button style={styles.menuItem} onClick={() => router.push("/surplus-alerts")}>
                   <div style={styles.iconBox}>🍱</div>
                   <div style={styles.menuText}>
                     <strong style={styles.menuTitle}>Live Surplus Deals</strong>
@@ -167,15 +216,28 @@ function DashboardContent() {
                   <div key={deal.id} style={styles.dealCard}>
                     <div style={styles.dealHeader}>
                       <div>
-                        <h3 style={styles.dealItem}>{deal.item}</h3>
-                        <p onClick={() => router.push(`/cafe/${deal.cafeName}`)} style={styles.dealCafe}>
-                          📍 {deal.cafeName}
-                        </p>
+                        
+                        <h3 style={styles.dealItem}>
+                          {deal.item} 
+                          <span style={styles.dealQuantity}>
+                            {deal.quantity} Left
+                          </span>
+                        </h3>
+
+                        <div style={styles.dealMetaContainer}>
+                          <p onClick={() => router.push(`/cafe/${deal.cafeName}`)} style={styles.dealCafe}>
+                            📍 {deal.cafeName}
+                          </p>
+                          <p style={styles.dealTime}>
+                            🕒 Published at {deal.time || "Recently"}
+                          </p>
+                        </div>
+
                       </div>
                       <span style={styles.discountBadge}>{deal.discount}</span>
                     </div>
-                    <button onClick={() => handleClaimDeal(deal)} style={styles.claimBtn}>
-                      Claim & Save Food (+50 Pts)
+                    <button onClick={() => openClaimModal(deal)} style={styles.claimBtn}>
+                      Claim & Save Food
                     </button>
                   </div>
                 ))
@@ -228,11 +290,47 @@ function DashboardContent() {
         </div>
       </div>
       <Footer />
+
+      {isModalOpen && selectedDeal && (
+        <div style={styles.modalOverlay}>
+          <div style={styles.modalBox}>
+            <div style={styles.modalIcon}>🍱</div>
+            <h2 style={styles.modalTitle}>Select Quantity</h2>
+            <p style={styles.modalText}>How many portions of <strong>{selectedDeal.item}</strong> would you like to claim?</p>
+            
+            <div style={styles.quantityContainer}>
+              <button 
+                onClick={() => setSurplusQuantity(prev => Math.max(1, prev - 1))} 
+                style={styles.qtyBtn}
+              >
+                −
+              </button>
+              <span style={styles.qtyNumber}>{surplusQuantity}</span>
+              <button 
+                onClick={() => setSurplusQuantity(prev => Math.min(selectedDeal.quantity, prev + 1))} 
+                style={styles.qtyBtn}
+              >
+                +
+              </button>
+            </div>
+            <p style={{ color: "#94a3b8", fontSize: "0.85rem", marginTop: "-10px", marginBottom: "25px" }}>
+              Max {selectedDeal.quantity} available
+            </p>
+
+            <div style={styles.modalActions}>
+              <button onClick={() => setIsModalOpen(false)} style={styles.cancelBtn}>Cancel</button>
+              <button onClick={handleConfirmClaim} style={styles.confirmBtn}>
+                Claim {surplusQuantity} Item(s)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
 
-// 🟢 FIX 3: Naya component banaya jo originally export hoga aur Suspense provide karega
 export default function UserDashboard() {
   return (
     <Suspense fallback={<div style={{ textAlign: "center", padding: "100px", fontSize: "1.2rem", color: "#00bfa5", marginTop: "100px" }}>Loading your dashboard... 🌿</div>}>
@@ -261,12 +359,17 @@ const styles = {
   tabSection: { animation: "fadeIn 0.3s ease" },
   sectionTitle: { color: "#0f172a", marginBottom: "25px", fontSize: "1.6rem", fontWeight: "800", display: "flex", alignItems: "center", gap: "10px" },
   emptyState: { textAlign: "center", color: "#64748b", backgroundColor: "white", padding: "40px", borderRadius: "20px", fontSize: "1rem", boxShadow: "0 10px 30px rgba(0,0,0,0.05)" },
-  dealCard: { backgroundColor: "white", padding: "25px", borderRadius: "20px", boxShadow: "0 10px 30px rgba(0,0,0,0.05)", borderLeft: "6px solid #f5a623", marginBottom: "20px" },
-  dealHeader: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "20px" },
-  dealItem: { margin: "0 0 8px 0", color: "#0f172a", fontSize: "1.3rem", fontWeight: "800" },
-  dealCafe: { margin: 0, color: "#475569", fontSize: "1rem", cursor: "pointer", fontWeight: "700", textDecoration: "underline" },
-  discountBadge: { backgroundColor: "#fee2e2", color: "#ef4444", padding: "6px 14px", borderRadius: "12px", fontWeight: "800", fontSize: "0.95rem", border: "1px solid #fca5a5" },
-  claimBtn: { width: "100%", padding: "14px", backgroundColor: "#f5a623", color: "white", border: "none", borderRadius: "14px", fontWeight: "800", cursor: "pointer", fontSize: "1.05rem", boxShadow: "0 4px 15px rgba(245, 166, 35, 0.3)", transition: "transform 0.1s" },
+  
+  dealCard: { backgroundColor: "white", padding: "22px 25px", borderRadius: "16px", boxShadow: "0 8px 25px rgba(0,0,0,0.04)", border: "1px solid #e2e8f0", borderLeft: "6px solid #00bfa5", marginBottom: "20px" },
+  dealHeader: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "18px" },
+  dealItem: { margin: "0 0 10px 0", color: "#0f172a", fontSize: "1.25rem", fontWeight: "800", display: "flex", alignItems: "center", flexWrap: "wrap", gap: "10px" },
+  dealQuantity: { fontSize: "1rem", color: "#d97706", backgroundColor: "#fef3c7", padding: "4px 12px", borderRadius: "10px", fontWeight: "800", display: "inline-block" },
+  dealMetaContainer: { display: "flex", flexDirection: "column", gap: "4px" },
+  dealCafe: { margin: 0, color: "#475569", fontSize: "0.95rem", fontWeight: "600", cursor: "pointer", textDecoration: "underline", display: "inline-block" },
+  dealTime: { margin: 0, color: "#94a3b8", fontSize: "0.85rem", fontWeight: "500" },
+  discountBadge: { backgroundColor: "#fee2e2", color: "#ef4444", padding: "6px 12px", borderRadius: "10px", fontWeight: "800", fontSize: "0.9rem" },
+  claimBtn: { width: "100%", padding: "14px", backgroundColor: "#00bfa5", color: "white", border: "none", borderRadius: "12px", fontWeight: "800", cursor: "pointer", fontSize: "1.05rem", boxShadow: "0 4px 12px rgba(0, 191, 165, 0.25)", transition: "transform 0.1s" },
+  
   savedCard: { display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "white", padding: "20px 25px", borderRadius: "20px", boxShadow: "0 10px 30px rgba(0,0,0,0.05)", marginBottom: "15px" },
   savedName: { display: "block", color: "#0f172a", fontSize: "1.15rem", cursor: "pointer", fontWeight: "800", textDecoration: "underline", marginBottom: "5px" },
   savedScore: { color: "#00bfa5", fontSize: "0.95rem", fontWeight: "700" },
@@ -274,5 +377,17 @@ const styles = {
   historyCard: { display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "white", padding: "20px 25px", borderRadius: "20px", boxShadow: "0 10px 30px rgba(0,0,0,0.05)", marginBottom: "15px", borderLeft: "6px solid #00bfa5" },
   historyItem: { margin: "0 0 5px 0", color: "#0f172a", fontSize: "1.1rem", fontWeight: "700" },
   historyMeta: { margin: 0, color: "#64748b", fontSize: "0.9rem" },
-  pointsGained: { backgroundColor: "#f0fdfa", color: "#00bfa5", border: "1px solid #ccfbf1", padding: "8px 14px", borderRadius: "20px", fontWeight: "800", fontSize: "0.95rem" }
+  pointsGained: { backgroundColor: "#f0fdfa", color: "#00bfa5", border: "1px solid #ccfbf1", padding: "8px 14px", borderRadius: "20px", fontWeight: "800", fontSize: "0.95rem" },
+  
+  modalOverlay: { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 },
+  modalBox: { backgroundColor: "white", padding: "40px", borderRadius: "24px", width: "90%", maxWidth: "450px", textAlign: "center", boxShadow: "0 25px 50px rgba(0,0,0,0.15)", animation: "fadeIn 0.3s ease" },
+  modalIcon: { fontSize: "3rem", marginBottom: "15px" },
+  modalTitle: { margin: "0 0 15px 0", color: "#1e293b", fontSize: "1.6rem", fontWeight: "800" },
+  modalText: { color: "#64748b", lineHeight: "1.6", marginBottom: "20px", fontSize: "1.05rem" },
+  quantityContainer: { display: "flex", justifyContent: "center", alignItems: "center", gap: "20px", marginBottom: "20px" },
+  qtyBtn: { width: "40px", height: "40px", borderRadius: "50%", border: "none", backgroundColor: "#f1f5f9", fontSize: "1.4rem", fontWeight: "bold", color: "#334155", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.2s" },
+  qtyNumber: { fontSize: "1.6rem", fontWeight: "800", color: "#1e293b", minWidth: "30px" },
+  modalActions: { display: "flex", gap: "15px", justifyContent: "center" },
+  cancelBtn: { flex: 1, backgroundColor: "#f1f5f9", color: "#475569", border: "none", padding: "12px", borderRadius: "12px", fontSize: "1rem", fontWeight: "bold", cursor: "pointer" },
+  confirmBtn: { flex: 1, backgroundColor: "#f5a623", color: "white", border: "none", padding: "12px", borderRadius: "12px", fontSize: "1rem", fontWeight: "bold", cursor: "pointer", boxShadow: "0 4px 10px rgba(245, 166, 35, 0.3)" }
 };

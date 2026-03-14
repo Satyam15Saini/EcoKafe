@@ -1,6 +1,6 @@
 "use client"; 
 
-import React from "react";
+import React, { useState } from "react"; // 🟢 FIX: useState import kiya quantity ke liye
 import { useParams, useRouter } from "next/navigation"; 
 import Navbar from "../../../Components/Navbar"; 
 import Footer from "../../../Components/Footer"; 
@@ -17,6 +17,10 @@ export default function SurplusAlertDetail() {
   const router = useRouter(); 
   const cafeId = params?.id;
   
+  // 🟢 NAYA: Quantity State
+  const [surplusQuantity, setSurplusQuantity] = useState(1);
+  const maxAvailableSurplus = 5; // Example max limit
+
   const alertData = allCafes.find(c => c.id.toString() === cafeId);
 
   if (!alertData) {
@@ -69,8 +73,37 @@ export default function SurplusAlertDetail() {
               </div>
             </div>
 
-            <button onClick={() => alert("Surplus Claimed! Your order ID is #ECO" + Math.floor(Math.random() * 10000))} style={{ width: "100%", backgroundColor: "#0f172a", color: "white", padding: "16px", borderRadius: "12px", border: "none", fontSize: "1.1rem", fontWeight: "bold", marginTop: "30px", cursor: "pointer", boxShadow: "0 4px 15px rgba(0,0,0,0.1)" }}>
-              Reserve & Claim Now
+            {/* 🟢 NAYA: Quantity Selector */}
+            <div style={{ marginTop: "30px", textAlign: "center" }}>
+              <p style={{ margin: "0 0 15px 0", color: "#334155", fontWeight: "bold", fontSize: "1.1rem" }}>Select Quantity</p>
+              <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "25px" }}>
+                <button 
+                  onClick={() => setSurplusQuantity(prev => Math.max(1, prev - 1))} 
+                  style={{ width: "45px", height: "45px", borderRadius: "50%", border: "none", backgroundColor: "#f1f5f9", fontSize: "1.5rem", fontWeight: "bold", color: "#334155", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.2s" }}
+                >
+                  −
+                </button>
+                <span style={{ fontSize: "1.8rem", fontWeight: "900", color: "#1e293b", minWidth: "40px", textAlign: "center" }}>
+                  {surplusQuantity}
+                </span>
+                <button 
+                  onClick={() => setSurplusQuantity(prev => Math.min(maxAvailableSurplus, prev + 1))} 
+                  style={{ width: "45px", height: "45px", borderRadius: "50%", border: "none", backgroundColor: "#f1f5f9", fontSize: "1.5rem", fontWeight: "bold", color: "#334155", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.2s" }}
+                >
+                  +
+                </button>
+              </div>
+              <p style={{ color: "#94a3b8", fontSize: "0.9rem", marginTop: "12px", marginBottom: "0" }}>
+                Max {maxAvailableSurplus} portions available today
+              </p>
+            </div>
+
+            {/* 🟢 FIX: Button ab selected quantity ke hisaab se text aur alert dikhayega */}
+            <button 
+              onClick={() => alert(`🎉 Success! You've claimed ${surplusQuantity} portion(s) of surplus food from ${alertData.name}.\n\nYour Order ID is #ECO${Math.floor(Math.random() * 10000)}`)} 
+              style={{ width: "100%", backgroundColor: "#0f172a", color: "white", padding: "16px", borderRadius: "12px", border: "none", fontSize: "1.1rem", fontWeight: "bold", marginTop: "30px", cursor: "pointer", boxShadow: "0 4px 15px rgba(0,0,0,0.1)" }}
+            >
+              Reserve {surplusQuantity} Item(s) Now
             </button>
           </div>
         </div>

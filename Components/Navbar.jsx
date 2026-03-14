@@ -2,11 +2,9 @@
 
 import { useRouter, usePathname } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
-// 🟢 FIX 1: AuthContext hata kar NextAuth import kiya
 import { useSession, signOut } from "next-auth/react"; 
 
 export default function Navbar() {
-  // 🟢 FIX 2: useSession() se data nikala aur username map kiya
   const { data: session } = useSession();
   const user = session?.user ? { ...session.user, username: session.user.name } : null;
 
@@ -88,7 +86,15 @@ export default function Navbar() {
             <button onClick={handleCafesClick} style={styles.link}>Cafes</button>
             <button onClick={() => router.push("/about")} style={styles.link}>About</button>
             
-            <button onClick={() => router.push(user ? "/user-dashboard?tab=deals" : "/login")} style={styles.link}>
+            {/* 🟢 NAYA FIX: Navbar mein Login Guard laga diya */}
+            <button onClick={() => {
+              if (!user) {
+                alert("Please log in to view Surplus Alerts! 🌿");
+                router.push("/login");
+              } else {
+                router.push("/surplus-alerts");
+              }
+            }} style={styles.link}>
               🔔 Surplus Alerts
             </button>
             
@@ -111,7 +117,6 @@ export default function Navbar() {
                     <div style={styles.divider} />
                     <div onClick={handleProfileClick} style={styles.menuItem}>👤 My Profile</div>
                     <div onClick={() => { setDropdownOpen(false); setIsFeedbackOpen(true); }} style={styles.menuItem}>💬 Feedback</div>
-                    {/* 🟢 FIX 3: NextAuth ka signOut function use kiya */}
                     <button onClick={() => { setDropdownOpen(false); signOut({ callbackUrl: '/' }); }} style={styles.logoutBtn}>Logout</button>
                   </div>
                 )}
@@ -127,7 +132,16 @@ export default function Navbar() {
           <button onClick={handleCafesClick} style={styles.mobileLink}>Cafes</button>
           <button onClick={() => { setMobileMenuOpen(false); router.push("/about"); }} style={styles.mobileLink}>About</button>
           
-          <button onClick={() => { setMobileMenuOpen(false); router.push(user ? "/user-dashboard?tab=deals" : "/login"); }} style={styles.mobileLink}>🔔 Surplus Alerts</button>
+          {/* 🟢 NAYA FIX: Mobile menu mein bhi Login Guard laga diya */}
+          <button onClick={() => { 
+            setMobileMenuOpen(false); 
+            if (!user) {
+              alert("Please log in to view Surplus Alerts! 🌿");
+              router.push("/login");
+            } else {
+              router.push("/surplus-alerts");
+            }
+          }} style={styles.mobileLink}>🔔 Surplus Alerts</button>
           
           <div style={{ width: "100%", height: "1px", backgroundColor: "rgba(255,255,255,0.1)", margin: "15px 0" }}></div>
           
@@ -144,7 +158,6 @@ export default function Navbar() {
               </div>
               <button onClick={handleProfileClick} style={styles.mobileLinkSecondary}>👤 My Profile</button>
               <button onClick={() => { setMobileMenuOpen(false); setIsFeedbackOpen(true); }} style={styles.mobileLinkSecondary}>💬 Feedback</button>
-              {/* 🟢 FIX 4: Mobile menu mein bhi signOut add kiya */}
               <button onClick={() => { setMobileMenuOpen(false); signOut({ callbackUrl: '/' }); }} style={styles.mobileLogoutBtn}>Logout</button>
             </div>
           )}

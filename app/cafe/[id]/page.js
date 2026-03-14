@@ -2,13 +2,13 @@
 
 import React, { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation"; 
-import { useSession } from "next-auth/react"; // 🟢 FIX: Session import kiya taaki pata chale kis user ne rate kiya hai
+import { useSession } from "next-auth/react"; 
 import Navbar from "../../../Components/Navbar"; 
 import Footer from "../../../Components/Footer"; 
 
 const allCafes = [
   { id: 1, name: "Green Leaf Cafe", location: "Dehradun", lat: 30.3165, lng: 78.0322, features: ["Vegan Options", "Composting", "Solar Powered"], score: 92, rating: 4.8, distance: "1.2 km", surplus: true, image: "https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&q=80&w=1200", menuImage: "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&q=80&w=800", desc: "A pioneer in sustainable dining with 100% compostable packaging and locally sourced organic ingredients.", openTime: "08:00 AM - 10:00 PM" },
-  { id: 2, name: "Earth Kitchen", location: "Delhi", lat: 28.6139, lng: 77.2090, features: ["Organic", "Zero Plastic"], score: 88, rating: 4.6, distance: "2.8 km", surplus: false, image: "https://images.unsplash.com/photo-1525610553991-2bede1a236e2?auto=format&fit=crop&q=80&w=1200", menuImage: "https://images.unsplash.com/photo-1544148103-0773bf10d330?auto=format&fit=crop&q=80&w=800", desc: "Farm-to-table restaurant supporting local farmers and significantly reducing food miles.", openTime: "09:00 AM - 11:00 PM" },
+  { id: 2, name: "Earth Kitchen", location: "Delhi", lat: 28.6139, lng: 77.2090, features: ["Organic", "Zero Plastic"], score: 88, rating: 4.6, distance: "2.8 km", surplus: false, image: "https://images.unsplash.com/photo-1559925393-8be0ec4767c8?auto=format&fit=crop&q=80&w=1200", menuImage: "https://images.unsplash.com/photo-1544148103-0773bf10d330?auto=format&fit=crop&q=80&w=800", desc: "Farm-to-table restaurant supporting local farmers and significantly reducing food miles.", openTime: "09:00 AM - 11:00 PM" },
   { id: 3, name: "Sustainable Sips", location: "Bangalore", lat: 12.9716, lng: 77.5946, features: ["Vegan Options", "Reusable Packaging"], score: 95, rating: 4.7, distance: "0.8 km", surplus: true, image: "https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&q=80&w=1200", menuImage: "https://images.unsplash.com/photo-1600565193348-f74bd3c7ccdf?auto=format&fit=crop&q=80&w=800", desc: "A cozy cafe with excellent coffee and a strict commitment to reusable packaging and zero waste.", openTime: "07:00 AM - 09:00 PM" },
   { id: 4, name: "The Roast Cafe", location: "Chandigarh", lat: 30.7333, lng: 76.7794, features: ["Vegan Options", "Composting"], score: 81, rating: 3.9, distance: "1.5 km", surplus: true, image: "https://plus.unsplash.com/premium_photo-1674327105074-46dd8319164b?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D", menuImage: "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&q=80&w=800", desc: "A small and comfortable café in Chandigarh known for its great coffee.", openTime: "08:00 AM - 11:00 PM" },
   { id: 5, name: "Himalayan Roots", location: "Roorkee", lat: 29.8543, lng: 77.8880, features: ["Organic", "Zero Plastic"], score: 85, rating: 4.5, distance: "3.2 km", surplus: false, image: "https://images.unsplash.com/photo-1497935586351-b67a49e012bf?auto=format&fit=crop&q=80&w=600", menuImage: "https://images.unsplash.com/photo-1544148103-0773bf10d330?auto=format&fit=crop&q=80&w=800", desc: "A peaceful spot offering organic teas and locally sourced snacks.", openTime: "10:00 AM - 08:00 PM" },
@@ -24,6 +24,9 @@ export default function CafeDetail() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isClaimed, setIsClaimed] = useState(false);
   
+  const [surplusQuantity, setSurplusQuantity] = useState(1);
+  const maxAvailableSurplus = 5; 
+
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [bookingDate, setBookingDate] = useState("");
   const [bookingTime, setBookingTime] = useState("");
@@ -33,12 +36,10 @@ export default function CafeDetail() {
   const cafeId = params?.id;
   const cafe = allCafes.find(c => c.id.toString() === cafeId);
 
-  // 🟢 NAYA: Rating States
   const [ratingHover, setRatingHover] = useState(0);
   const [userRating, setUserRating] = useState(0);
   const [cafeStats, setCafeStats] = useState({ rating: cafe?.rating || 0, totalReviews: 12 });
 
-  // 🟢 NAYA: Load ratings from LocalStorage when page opens
   useEffect(() => {
     if (!cafe) return;
     const storedRatings = JSON.parse(localStorage.getItem(`ratings_${cafe.id}`)) || [];
@@ -46,7 +47,7 @@ export default function CafeDetail() {
     if (storedRatings.length > 0) {
       const newTotalReviews = 12 + storedRatings.length;
       const userRatingsSum = storedRatings.reduce((sum, r) => sum + r.rating, 0);
-      const baseRatingsSum = cafe.rating * 12; // Base dummy reviews
+      const baseRatingsSum = cafe.rating * 12; 
       const newAverage = (baseRatingsSum + userRatingsSum) / newTotalReviews;
       
       setCafeStats({ rating: newAverage.toFixed(1), totalReviews: newTotalReviews });
@@ -58,14 +59,13 @@ export default function CafeDetail() {
     }
   }, [cafe, userName]);
 
-  // 🟢 NAYA: Submit Rating Function
   const handleRate = (rateValue) => {
     if (!userName) {
       alert("Please log in to rate this cafe! 🌿");
       router.push("/login");
       return;
     }
-    if (userRating > 0) return; // Already rated
+    if (userRating > 0) return; 
 
     const storedRatings = JSON.parse(localStorage.getItem(`ratings_${cafe.id}`)) || [];
     const newRatings = [...storedRatings, { username: userName, rating: rateValue }];
@@ -73,7 +73,6 @@ export default function CafeDetail() {
 
     setUserRating(rateValue);
 
-    // Update Live Average
     const newTotalReviews = 12 + newRatings.length;
     const userRatingsSum = newRatings.reduce((sum, r) => sum + r.rating, 0);
     const baseRatingsSum = cafe.rating * 12;
@@ -86,7 +85,10 @@ export default function CafeDetail() {
   const handleConfirmClaim = () => setIsClaimed(true); 
   const closeModal = () => {
     setIsModalOpen(false);
-    setTimeout(() => setIsClaimed(false), 300); 
+    setTimeout(() => {
+      setIsClaimed(false);
+      setSurplusQuantity(1); 
+    }, 300); 
   };
 
   const handleGetDirections = () => {
@@ -111,6 +113,13 @@ export default function CafeDetail() {
   };
 
   const handlePayment = async () => {
+    // 🟢 NAYA FIX: Table booking ke liye login check
+    if (!userName) {
+      alert("Please log in to book a table! 🌿");
+      router.push("/login");
+      return;
+    }
+
     if(!bookingDate || !bookingTime) {
       alert("Please select a date and time for your booking! 📅");
       return;
@@ -137,7 +146,7 @@ export default function CafeDetail() {
         setIsProcessingPayment(false);
       },
       prefill: {
-        name: "EcoKafe User",
+        name: userName || "EcoKafe User",
         email: "user@ecokafe.com",
         contact: "9999999999",
       },
@@ -185,7 +194,6 @@ export default function CafeDetail() {
               <span style={styles.scoreBadge}>🌱 AI Score: {cafe.score}/100</span>
             </div>
             <h1 style={styles.cafeName}>{cafe.name}</h1>
-            {/* 🟢 FIX: Rating ab dynamically stats se aayegi */}
             <p style={styles.cafeLocation}>📍 {cafe.location} • ⭐ {cafeStats.rating} ({cafeStats.totalReviews} Reviews) • ({cafe.distance})</p>
           </div>
         </div>
@@ -199,7 +207,6 @@ export default function CafeDetail() {
               {cafe.features.map((feature, index) => <span key={index} style={styles.featureTag}>✓ {feature}</span>)}
             </div>
 
-            {/* 🟢 NAYA: Rating Section UI */}
             <div style={styles.ratingSection}>
               <h3 style={{ margin: "0 0 10px 0", color: "#1e293b" }}>Rate Your Experience</h3>
               <div style={styles.starsContainer}>
@@ -275,7 +282,15 @@ export default function CafeDetail() {
               <div style={styles.surplusBox}>
                 <h4 style={{ margin: "0 0 10px 0", color: "#b45309" }}>Surplus Food Alert!</h4>
                 <p style={{ margin: "0 0 15px 0", fontSize: "0.9rem", color: "#d97706" }}>Grab high-quality leftover food at 50% off and help prevent food waste.</p>
-                <button style={styles.surplusBtn} onClick={() => setIsModalOpen(true)}>Claim Surplus Now</button>
+                {/* 🟢 NAYA FIX: Surplus alert ke liye login check */}
+                <button style={styles.surplusBtn} onClick={() => {
+                  if (!userName) {
+                    alert("Please log in to claim surplus food! 🌿");
+                    router.push("/login");
+                  } else {
+                    router.push("/surplus-alerts");
+                  }
+                }}>Claim Surplus Now</button>
               </div>
             ) : (
               <p style={styles.noSurplusText}>No surplus food available today.</p>
@@ -297,24 +312,43 @@ export default function CafeDetail() {
         </div>
       )}
 
+      {/* Note: Ye local modal ab yahan use nahi ho raha kyunki flow /surplus-alerts par jaata hai, par component break na ho isliye rakha hua hai */}
       {isModalOpen && (
         <div style={styles.modalOverlay}>
           <div style={styles.modalBox}>
             {!isClaimed ? (
               <>
                 <div style={styles.modalIcon}>🍱</div>
-                <h2 style={styles.modalTitle}>Confirm Your Claim</h2>
-                <p style={styles.modalText}>Are you sure you want to claim the surplus food from <strong>{cafe.name}</strong> at a 50% discount?</p>
+                <h2 style={styles.modalTitle}>Select Quantity</h2>
+                <p style={styles.modalText}>How many portions would you like to claim from <strong>{cafe.name}</strong> at a 50% discount?</p>
+                
+                <div style={styles.quantityContainer}>
+                  <button 
+                    onClick={() => setSurplusQuantity(prev => Math.max(1, prev - 1))} 
+                    style={styles.qtyBtn}
+                  >
+                    −
+                  </button>
+                  <span style={styles.qtyNumber}>{surplusQuantity}</span>
+                  <button 
+                    onClick={() => setSurplusQuantity(prev => Math.min(maxAvailableSurplus, prev + 1))} 
+                    style={styles.qtyBtn}
+                  >
+                    +
+                  </button>
+                </div>
+                <p style={{ color: "#94a3b8", fontSize: "0.85rem", marginTop: "-10px", marginBottom: "25px" }}>Max {maxAvailableSurplus} portions available today</p>
+
                 <div style={styles.modalActions}>
                   <button onClick={closeModal} style={styles.cancelBtn}>Cancel</button>
-                  <button onClick={handleConfirmClaim} style={styles.confirmBtn}>Yes, Claim It</button>
+                  <button onClick={handleConfirmClaim} style={styles.confirmBtn}>Claim {surplusQuantity} Item(s)</button>
                 </div>
               </>
             ) : (
               <>
                 <div style={styles.modalIconSuccess}>🎉</div>
                 <h2 style={styles.modalTitle}>Claim Successful!</h2>
-                <p style={styles.modalText}>Your order is reserved at <strong>{cafe.name}</strong>. Show your confirmation email at the counter within the next hour.</p>
+                <p style={styles.modalText}>Your order for <strong>{surplusQuantity} portion(s)</strong> is reserved at <strong>{cafe.name}</strong>. Show your confirmation email at the counter within the next hour.</p>
                 <button onClick={closeModal} style={styles.successBtn}>Done</button>
               </>
             )}
@@ -346,7 +380,6 @@ const styles = {
   featureTag: { backgroundColor: "#f1f5f9", color: "#334155", padding: "8px 16px", borderRadius: "8px", fontSize: "0.95rem", fontWeight: "600" },
   actionCard: { backgroundColor: "white", padding: "30px", borderRadius: "24px", boxShadow: "0 10px 30px rgba(0,0,0,0.05)", position: "sticky", top: "100px" },
   
-  // 🟢 NAYA: Rating styles
   ratingSection: { backgroundColor: "#f8fafc", padding: "25px", borderRadius: "16px", marginTop: "30px", border: "1px dashed #cbd5e1", textAlign: "center" },
   starsContainer: { display: "flex", gap: "8px", justifyContent: "center", fontSize: "2.5rem", marginBottom: "10px" },
   star: { transition: "color 0.2s, transform 0.2s" },
@@ -371,7 +404,12 @@ const styles = {
   modalIcon: { fontSize: "3rem", marginBottom: "15px" },
   modalIconSuccess: { fontSize: "3rem", marginBottom: "15px", color: "#00bfa5" },
   modalTitle: { margin: "0 0 15px 0", color: "#1e293b", fontSize: "1.6rem", fontWeight: "800" },
-  modalText: { color: "#64748b", lineHeight: "1.6", marginBottom: "30px", fontSize: "1.05rem" },
+  modalText: { color: "#64748b", lineHeight: "1.6", marginBottom: "20px", fontSize: "1.05rem" },
+
+  quantityContainer: { display: "flex", justifyContent: "center", alignItems: "center", gap: "20px", marginBottom: "20px" },
+  qtyBtn: { width: "40px", height: "40px", borderRadius: "50%", border: "none", backgroundColor: "#f1f5f9", fontSize: "1.4rem", fontWeight: "bold", color: "#334155", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.2s" },
+  qtyNumber: { fontSize: "1.6rem", fontWeight: "800", color: "#1e293b", minWidth: "30px" },
+
   modalActions: { display: "flex", gap: "15px", justifyContent: "center" },
   cancelBtn: { flex: 1, backgroundColor: "#f1f5f9", color: "#475569", border: "none", padding: "12px", borderRadius: "12px", fontSize: "1rem", fontWeight: "bold", cursor: "pointer" },
   confirmBtn: { flex: 1, backgroundColor: "#f5a623", color: "white", border: "none", padding: "12px", borderRadius: "12px", fontSize: "1rem", fontWeight: "bold", cursor: "pointer", boxShadow: "0 4px 10px rgba(245, 166, 35, 0.3)" },
