@@ -18,6 +18,23 @@ const transporter = nodemailer.createTransport({
 export async function POST(req) {
   try {
     const { username, email, password, role } = await req.json();
+    
+    // Validate required fields
+    if (!username || !email || !password) {
+      return NextResponse.json({ message: "Please provide username, email, and password" }, { status: 400 });
+    }
+    
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return NextResponse.json({ message: "Please provide a valid email address" }, { status: 400 });
+    }
+    
+    // Validate password length
+    if (password.length < 6) {
+      return NextResponse.json({ message: "Password must be at least 6 characters long" }, { status: 400 });
+    }
+    
     await connectToDatabase();
 
     // Check karo agar email pehle se exist karti hai
@@ -80,7 +97,21 @@ export async function POST(req) {
       email: newUser.email
     }, { status: 201 });
   } catch (error) {
-    console.log("Signup Error:", error);
-    return NextResponse.json({ message: "An error occurred during signup" }, { status: 500 });
-  }
+    console.error("Signup Error Details:", error.message, error.code);
+    
+    // Handle specific errors
+    if (error.message && error.message.includes("EAUTH")) {
+      console.error("Email authentication failed. Check EMAIL_USER and EMAIL_PASS in .env.local");
+      return NextResponse.json({ message: "Email service error. Please contact support." }, { status: 500 });
+    }
+    
+    if (error.name === "ValidationError") {
+      return NextResponse.json({ message: "Please fill in all required fields correctly" }, { status: 400 });
+    }
+    
+    if (error.code === 11000) {
+      return NextResponse.json({ message: "This email is already registered" }, { status: 400 });
+    }
+    
+    return NextResponse.json({ message: "An error occurred during signup. Please try again." }, { status: 500 });
 }
