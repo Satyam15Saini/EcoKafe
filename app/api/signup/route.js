@@ -96,6 +96,7 @@ export async function POST(req) {
       userId: newUser._id,
       email: newUser.email
     }, { status: 201 });
+
   } catch (error) {
     console.error("Signup Error Details:", error.message, error.code);
     
@@ -114,4 +115,5 @@ export async function POST(req) {
     }
     
     return NextResponse.json({ message: "An error occurred during signup. Please try again." }, { status: 500 });
-}
+  } 
+} 
