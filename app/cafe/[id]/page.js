@@ -113,7 +113,6 @@ export default function CafeDetail() {
   };
 
   const handlePayment = async () => {
-    // 🟢 NAYA FIX: Table booking ke liye login check
     if (!userName) {
       alert("Please log in to book a table! 🌿");
       router.push("/login");
@@ -168,6 +167,11 @@ export default function CafeDetail() {
     paymentObject.open();
   };
 
+  // 🟢 NAYA FIX: Direct route par bhejne wala function
+  const handleSurplusClick = () => {
+    router.push(`/surplus-alerts/${cafe.id}`);
+  };
+
   if (!cafe) {
     return (
         <div style={styles.pageContainer}>
@@ -190,7 +194,19 @@ export default function CafeDetail() {
           <div style={styles.overlay}></div>
           <div style={styles.bannerContent}>
             <div style={styles.badgeWrapper}>
-              {cafe.surplus && <span style={styles.surplusBadge}>🍱 Surplus Available</span>}
+              
+              {/* 🟢 NAYA FIX: Click karne par ab ye sidha /surplus-alerts/[id] par le jayega */}
+              {cafe.surplus && (
+                <button 
+                  onClick={handleSurplusClick} 
+                  style={{...styles.surplusBadge, border: "none", cursor: "pointer", transition: "transform 0.2s"}}
+                  onMouseOver={(e) => e.currentTarget.style.transform = "scale(1.05)"}
+                  onMouseOut={(e) => e.currentTarget.style.transform = "scale(1)"}
+                >
+                  🍱 Surplus Available
+                </button>
+              )}
+              
               <span style={styles.scoreBadge}>🌱 AI Score: {cafe.score}/100</span>
             </div>
             <h1 style={styles.cafeName}>{cafe.name}</h1>
@@ -282,13 +298,12 @@ export default function CafeDetail() {
               <div style={styles.surplusBox}>
                 <h4 style={{ margin: "0 0 10px 0", color: "#b45309" }}>Surplus Food Alert!</h4>
                 <p style={{ margin: "0 0 15px 0", fontSize: "0.9rem", color: "#d97706" }}>Grab high-quality leftover food at 50% off and help prevent food waste.</p>
-                {/* 🟢 NAYA FIX: Surplus alert ke liye login check */}
                 <button style={styles.surplusBtn} onClick={() => {
                   if (!userName) {
                     alert("Please log in to claim surplus food! 🌿");
                     router.push("/login");
                   } else {
-                    router.push("/surplus-alerts");
+                    router.push(`/surplus-alerts/${cafe.id}`);
                   }
                 }}>Claim Surplus Now</button>
               </div>
