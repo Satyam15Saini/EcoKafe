@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation"; 
 import Link from "next/link"; 
-import { signIn } from "next-auth/react"; // 🟢 FIX: NextAuth se signIn import kiya
+import { signIn } from "next-auth/react";
 import Navbar from "../../Components/Navbar";
 import Footer from "../../Components/Footer";
 
@@ -12,10 +12,22 @@ export default function Signup() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("user");
+  const [otp, setOtp] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false); 
+  const [loading, setLoading] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [step, setStep] = useState("signup"); // "signup" or "verify-otp"
+  const [signupEmail, setSignupEmail] = useState("");
   
-  const router = useRouter(); 
+  const router = useRouter();
+
+  // Detect mobile viewport
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []); 
 
   const handleSignup = async (e) => {
     e.preventDefault();
@@ -23,7 +35,6 @@ export default function Signup() {
     setLoading(true);
 
     try {
-      // 1. Pehle user ko MongoDB mein create karo
       const res = await fetch("/api/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -33,32 +44,14 @@ export default function Signup() {
       const data = await res.json();
 
       if (res.ok) {
-        // 2. 🟢 Account banne ke turant baad NextAuth se automatically Login karwao
-        const signInRes = await signIn("credentials", {
-          redirect: false, // Page reload na ho
-          email,
-          password,
-        });
-
-        if (signInRes?.error) {
-          setError("Account created, but auto-login failed. Please go to Login page.");
-          setLoading(false);
-          return;
-        }
-
-        alert("🎉 Account created successfully! Welcome to EcoKafe.");
-
-        // 3. 🟢 Role ke hisaab se sahi Dashboard par bhejo
-        if (role === "admin") {
-          router.push("/admin-dashboard");
-        } else if (role === "owner") {
-          router.push("/owner-dashboard"); // Login page ke mutabiq route name match kiya hai
-        } else {
-          router.push("/user-dashboard");
-        }
+        // Move to OTP verification step
+        setSignupEmail(email);
+        setStep("verify-otp");
+        setOtp("");
+        setLoading(false);
       } else {
         setError(data.message || "Registration failed. Please try again.");
-        setLoading(false); // Error aane par loading roko
+        setLoading(false);
       }
     } catch (err) {
       console.error("Signup Error:", err);
@@ -67,51 +60,162 @@ export default function Signup() {
     }
   };
 
+  const handleVerifyOTP = async (e) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    try {
+      const res = await fetch("/api/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: signupEmail, otp }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        // OTP verified, now auto-login
+        const signInRes = await signIn("credentials", {
+          redirect: false,
+          email: signupEmail,
+          password,
+        });
+
+        if (signInRes?.error) {
+          setError("OTP verified, but login failed. Please go to Login page.");
+          setLoading(false);
+          return;
+        }
+
+        alert("🎉 Email verified! Welcome to EcoKafe.");
+
+        if (role === "admin") {
+          router.push("/admin-dashboard");
+        } else if (role === "owner") {
+          router.push("/owner-dashboard");
+        } else {
+          router.push("/user-dashboard");
+        }
+      } else {
+        setError(data.message || "OTP verification failed. Please try again.");
+        setLoading(false);
+      }
+    } catch (err) {
+      console.error("OTP Verification Error:", err);
+      setError("Failed to verify OTP. Please try again.");
+      setLoading(false);
+    }
+  };
+
   return (
     <div style={styles.pageContainer}>
       <Navbar />
 
-      <div style={styles.contentWrapper}>
-        <div style={styles.signupCard}>
-          <div style={styles.header}>
-            <img src="/Logo.png" alt="EcoKafe Logo" style={styles.logoImage} />
-            <h2 style={styles.title}>Join EcoKafe</h2>
-            <p style={styles.subtitle}>Create an account to reduce food waste.</p>
+      <div style={isMobile ? {...styles.contentWrapper, padding: "50px 15px 30px 15px"} : styles.contentWrapper}>
+        <div style={isMobile ? {...styles.signupCard, padding: "20px"} : styles.signupCard}>
+          <div style={isMobile ? {...styles.header, marginBottom: "15px"} : styles.header}>
+            <img src="/Logo.png" alt="EcoKafe Logo" style={isMobile ? {...styles.logoImage, height: "45px", width: "45px"} : styles.logoImage} />
+            <h2 style={isMobile ? {...styles.title, fontSize: "1.3rem", margin: "0 0 5px 0"} : styles.title}>Join EcoKafe</h2>
+            <p style={isMobile ? {...styles.subtitle, fontSize: "0.85rem"} : styles.subtitle}>Create an account to reduce food waste.</p>
           </div>
 
           {error && <div style={styles.errorBox}>{error}</div>}
 
-          <form onSubmit={handleSignup} style={styles.form}>
-            <div style={styles.inputGroup}>
-              <label style={styles.label}>Full Name</label>
-              <input type="text" placeholder="e.g. Rahul Sharma" value={username} onChange={(e) => setUsername(e.target.value)} required style={styles.input} />
-            </div>
+          {step === "signup" ? (
+            <form onSubmit={handleSignup} style={isMobile ? {...styles.form, gap: "12px"} : styles.form}>
+              <div style={styles.inputGroup}>
+                <label style={styles.label}>Full Name</label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. Rahul Sharma" 
+                  value={username} 
+                  onChange={(e) => setUsername(e.target.value)} 
+                  required 
+                  style={isMobile ? {...styles.input, fontSize: "16px", padding: "10px 12px"} : styles.input} 
+                />
+              </div>
 
-            <div style={styles.inputGroup}>
-              <label style={styles.label}>Email Address</label>
-              <input type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required style={styles.input} />
-            </div>
+              <div style={styles.inputGroup}>
+                <label style={styles.label}>Email Address</label>
+                <input 
+                  type="email" 
+                  placeholder="you@example.com" 
+                  value={email} 
+                  onChange={(e) => setEmail(e.target.value)} 
+                  required 
+                  style={isMobile ? {...styles.input, fontSize: "16px", padding: "10px 12px"} : styles.input} 
+                />
+              </div>
 
-            <div style={styles.inputGroup}>
-              <label style={styles.label}>Password</label>
-              <input type="password" placeholder="Create a strong password" value={password} onChange={(e) => setPassword(e.target.value)} required style={styles.input} />
-            </div>
+              <div style={styles.inputGroup}>
+                <label style={styles.label}>Password</label>
+                <input 
+                  type="password" 
+                  placeholder="Create a strong password" 
+                  value={password} 
+                  onChange={(e) => setPassword(e.target.value)} 
+                  required 
+                  style={isMobile ? {...styles.input, fontSize: "16px", padding: "10px 12px"} : styles.input} 
+                />
+              </div>
 
-            <div style={styles.inputGroup}>
-              <label style={styles.label}>I want to join as a:</label>
-              <select value={role} onChange={(e) => setRole(e.target.value)} style={styles.selectInput}>
-                <option value="user">User</option>
-                <option value="owner">Cafe Owner</option>
-                <option value="admin">Admin</option>
-              </select>
-            </div>
+              <div style={styles.inputGroup}>
+                <label style={styles.label}>I want to join as a:</label>
+                <select 
+                  value={role} 
+                  onChange={(e) => setRole(e.target.value)} 
+                  style={isMobile ? {...styles.selectInput, fontSize: "16px", padding: "10px 12px"} : styles.selectInput} 
+                >
+                  <option value="user">User</option>
+                  <option value="owner">Cafe Owner</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
 
-            <button type="submit" disabled={loading} style={{ ...styles.submitBtn, opacity: loading ? 0.7 : 1 }}>
-              {loading ? "Creating Account..." : "Create Account"}
-            </button>
-          </form>
+              <button 
+                type="submit" 
+                disabled={loading} 
+                style={isMobile ? { ...styles.submitBtn, opacity: loading ? 0.7 : 1, padding: "12px", fontSize: "0.95rem" } : { ...styles.submitBtn, opacity: loading ? 0.7 : 1 }}
+              >
+                {loading ? "Creating Account..." : "Create Account"}
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleVerifyOTP} style={isMobile ? {...styles.form, gap: "12px"} : styles.form}>
+              <div style={{textAlign: "center", marginBottom: "15px"}}>
+                <p style={{color: "#64748b", margin: "0 0 5px 0"}}>Verification code sent to</p>
+                <p style={{fontWeight: "600", color: "#0f172a", margin: 0}}>{signupEmail}</p>
+              </div>
 
-          <div style={styles.footerText}>
+              <div style={styles.inputGroup}>
+                <label style={styles.label}>Enter 6-Digit OTP</label>
+                <input 
+                  type="text" 
+                  placeholder="000000" 
+                  value={otp} 
+                  onChange={(e) => setOtp(e.target.value.slice(0, 6))} 
+                  maxLength="6"
+                  required 
+                  style={isMobile ? {...styles.input, fontSize: "16px", padding: "10px 12px", textAlign: "center", letterSpacing: "4px", fontWeight: "bold"} : {...styles.input, textAlign: "center", letterSpacing: "4px", fontWeight: "bold"}} 
+                />
+              </div>
+
+              <button 
+                type="submit" 
+                disabled={loading || otp.length !== 6} 
+                style={isMobile ? { ...styles.submitBtn, opacity: loading || otp.length !== 6 ? 0.7 : 1, padding: "12px", fontSize: "0.95rem" } : { ...styles.submitBtn, opacity: loading || otp.length !== 6 ? 0.7 : 1 }}
+              >
+                {loading ? "Verifying..." : "Verify Email"}
+              </button>
+
+              <p style={{textAlign: "center", color: "#94a3b8", fontSize: "0.85rem", marginTop: "15px"}}>
+                Didn't receive the code? Check spam folder or try signing up again.
+              </p>
+            </form>
+          )}
+
+          <div style={isMobile ? {...styles.footerText, fontSize: "0.85rem"} : styles.footerText}>
             Already have an account?{" "}
             <Link href="/login" style={styles.link}>
               Log in here
@@ -124,7 +228,6 @@ export default function Signup() {
   );
 }
 
-// 🎨 Styles untouched (100% same as yours)
 const styles = {
   pageContainer: { minHeight: "100vh", display: "flex", flexDirection: "column", backgroundColor: "#f4f7f6", fontFamily: "'Inter', sans-serif" },
   contentWrapper: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "80px 20px 20px 20px" },
@@ -134,6 +237,9 @@ const styles = {
   title: { margin: "0 0 5px 0", fontSize: "1.5rem", fontWeight: "800", color: "#0f172a" },
   subtitle: { margin: 0, color: "#64748b", fontSize: "0.9rem" },
   errorBox: { backgroundColor: "#fee2e2", color: "#ef4444", padding: "10px", borderRadius: "8px", textAlign: "center", marginBottom: "15px", fontSize: "0.85rem", fontWeight: "600", border: "1px solid #fca5a5" },
+  
+
+  
   form: { display: "flex", flexDirection: "column", gap: "12px" },
   inputGroup: { display: "flex", flexDirection: "column", gap: "4px" },
   label: { fontSize: "0.85rem", color: "#334155", fontWeight: "700" },
