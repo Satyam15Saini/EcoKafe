@@ -134,8 +134,8 @@ export default function CafeDetail() {
     }
 
     const options = {
-      key: "rzp_test_SO7JF1hwSrLE2x", 
-      amount: "10000", 
+      key: "rzp_live_SVvg1nV2jnKBsd", 
+      amount: "10000", //100
       currency: "INR",
       name: "EcoKafe Booking",
       description: `Table Reservation at ${cafe.name}`,

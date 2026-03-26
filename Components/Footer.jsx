@@ -71,6 +71,8 @@ export default function Footer() {
             <li style={styles.listItem} onClick={() => router.push("/contact")}>Contact Us</li>
             <li style={styles.listItem} onClick={() => router.push("/privacy")}>Privacy Policy</li>
             <li style={styles.listItem} onClick={() => router.push("/terms")}>Terms of Service</li>
+            {/* 🟢 NAYA FIX: Refund Policy ka link yahan add kar diya */}
+            <li style={styles.listItem} onClick={() => router.push("/refund-policy")}>Cancellation & Refund Policy</li>
           </ul>
         </div>
 
