@@ -5,7 +5,7 @@ import SurplusFood from "../../../models/SurplusFood";
 import Cafe from "../../../models/Cafe";
 import User from "../../../models/User";
 import { getServerSession } from "next-auth";
-import { authOptions } from "../../../lib/auth";
+import { authOptions } from "@/lib/auth";
 
 // GET all bookings for a user
 export async function GET(req) {

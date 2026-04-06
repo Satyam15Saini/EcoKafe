@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { connectToDatabase } from "../../../../../../lib/mongodb";
 import SurplusFood from "../../../../../../models/SurplusFood";
 import { getServerSession } from "next-auth";
-import { authOptions } from "../../../../../lib/auth";
+import { authOptions } from "@/lib/auth";
 
 // PUT - Update surplus food item
 export async function PUT(req, { params }) {

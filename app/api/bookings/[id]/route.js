@@ -3,7 +3,7 @@ import { connectToDatabase } from "../../../../lib/mongodb";
 import Booking from "../../../../models/Booking";
 import User from "../../../../models/User";
 import { getServerSession } from "next-auth";
-import { authOptions } from "../../../../lib/auth";
+import { authOptions } from "@/lib/auth";
 
 // PUT - Update booking status (Cancel)
 export async function PUT(req, { params }) {

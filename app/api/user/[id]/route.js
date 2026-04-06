@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { connectToDatabase } from "../../../lib/mongodb";
-import User from "../../../models/User";
+import { connectToDatabase } from "@/lib/mongodb";
+import User from "@/models/User";
 import { getServerSession } from "next-auth";
-import { authOptions } from "../../../lib/auth";
+import { authOptions } from "@/lib/auth";
 
 // GET user profile
 export async function GET(req, { params }) {
