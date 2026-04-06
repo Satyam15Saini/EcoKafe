@@ -3,7 +3,7 @@ import { connectToDatabase } from "../../../../lib/mongodb";
 import Cafe from "../../../../models/Cafe";
 import SurplusFood from "../../../../models/SurplusFood";
 import { getServerSession } from "next-auth";
-import { authOptions } from "../../auth/[...nextauth]/route";
+import { authOptions } from "../../../../lib/auth";
 
 export async function GET(req, { params }) {
   try {
