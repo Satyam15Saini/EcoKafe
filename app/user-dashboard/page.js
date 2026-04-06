@@ -1,393 +1,359 @@
-"use client"; 
+"use client";
 
-import { useRouter, useSearchParams } from "next/navigation"; 
-import { useState, useEffect, Suspense } from "react"; 
-import { useSession } from "next-auth/react"; 
-import Navbar from "../../Components/Navbar"; 
-import Footer from "../../Components/Footer"; 
+import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useSession } from "next-auth/react";
+import Navbar from "../../Components/Navbar";
+import Footer from "../../Components/Footer";
 
 function DashboardContent() {
   const router = useRouter();
-  const searchParams = useSearchParams(); 
-  // 🟢 NAYA FIX: status extract kiya auth check ke liye
   const { data: session, status } = useSession();
-  
-  const userName = session?.user?.name;
 
-  const [activeTab, setActiveTab] = useState("home"); 
-  const [points, setPoints] = useState(350);
-  const [savedCafes, setSavedCafes] = useState([]);
-  const [history, setHistory] = useState([]);
-  const [availableDeals, setAvailableDeals] = useState([]);
+  const [activeTab, setActiveTab] = useState("overview");
+  const [userInfo, setUserInfo] = useState(null);
+  const [bookingHistory, setBookingHistory] = useState([]);
+  const [stats, setStats] = useState({
+    totalBookings: 0,
+    totalSpent: 0,
+    pointsEarned: 0,
+    foodItemsClaimed: 0
+  });
+  const [loading, setLoading] = useState(true);
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedDeal, setSelectedDeal] = useState(null);
-  const [surplusQuantity, setSurplusQuantity] = useState(1);
-
-  // 🟢 NAYA FIX: Security Guard (Redirect unauthenticated users)
+  // Security Guard
   useEffect(() => {
     if (status === "unauthenticated") {
       router.push("/login");
     }
   }, [status, router]);
 
+  // Fetch user data on authentication
   useEffect(() => {
-    const tabParam = searchParams.get("tab");
-    if (tabParam) {
-      setActiveTab(tabParam);
+    if (status === "authenticated" && session?.user?.id) {
+      fetchUserData();
+      fetchBookingHistory();
     }
-  }, [searchParams]);
+  }, [status, session?.user?.id]);
 
-  useEffect(() => {
-    if (!userName) return;
+  const fetchUserData = async () => {
+    try {
+      const response = await fetch(`/api/user/${session?.user?.id}`);
+      const data = await response.json();
+      if (data.success) {
+        setUserInfo(data.data);
+      }
+    } catch (error) {
+      console.error("Error fetching user data:", error);
+    }
+  };
 
-    const storedPoints = localStorage.getItem(`points_${userName}`);
-    if (storedPoints) setPoints(parseInt(storedPoints));
+  const fetchBookingHistory = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch("/api/bookings");
+      const data = await response.json();
 
-    const storedSaved = JSON.parse(localStorage.getItem(`saved_${userName}`));
-    if (storedSaved) setSavedCafes(storedSaved);
-    else setSavedCafes([{ id: 1, name: "Green Leaf Cafe", score: 92 }, { id: 2, name: "Sustainable Sip", score: 95 }]);
+      if (data.success) {
+        setBookingHistory(data.data || []);
 
-    const storedHistory = JSON.parse(localStorage.getItem(`history_${userName}`));
-    if (storedHistory) setHistory(storedHistory);
-    else setHistory([{ id: 1001, item: "Organic Coffee", cafe: "Eco Brew Hub", date: "Oct 24", pointsEarned: 10 }]);
+        // Calculate stats
+        let totalSpent = 0;
+        let pointsEarned = 0;
+        let foodClaimed = 0;
 
-    let realDeals = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.startsWith("deals_")) {
-        const ownerName = key.split("_")[1];
-        const ownerDeals = JSON.parse(localStorage.getItem(key)) || [];
-        ownerDeals.forEach(deal => {
-          realDeals.push({ ...deal, cafeName: `${ownerName.toUpperCase()}'s Cafe`, quantity: deal.quantity || 5 });
+        data.data?.forEach(booking => {
+          totalSpent += booking.totalPrice || 0;
+          pointsEarned += booking.pointsEarned || 0;
+          if (booking.bookingType === "SurplusFood") {
+            foodClaimed += booking.quantityClaimed || 0;
+          }
+        });
+
+        setStats({
+          totalBookings: data.data?.length || 0,
+          totalSpent,
+          pointsEarned,
+          foodItemsClaimed: foodClaimed
         });
       }
+    } catch (error) {
+      console.error("Error fetching bookings:", error);
+    } finally {
+      setLoading(false);
     }
-
-    if (realDeals.length === 0) {
-      realDeals = [
-        { id: 901, item: "Vegan Wrap", discount: "40% OFF", cafeName: "Green Leaf Cafe", quantity: 2, time: "10:30 AM" },
-        { id: 902, item: "Surplus Muffins", discount: "50% OFF", cafeName: "Eco Brew Hub", quantity: 5, time: "11:15 AM" }
-      ];
-    }
-    setAvailableDeals(realDeals);
-
-  }, [userName]);
-
-  const openClaimModal = (deal) => {
-    setSelectedDeal(deal);
-    setSurplusQuantity(1);
-    setIsModalOpen(true);
   };
 
-  const handleConfirmClaim = () => {
-    if (!selectedDeal) return;
+  const handleCancelBooking = async (bookingId) => {
+    if (!confirm("Are you sure you want to cancel this booking?")) return;
 
-    const claimedQty = surplusQuantity;
-    const pointsEarned = claimedQty * 50;
+    try {
+      const response = await fetch(`/api/bookings/${bookingId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "Cancelled" })
+      });
 
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.startsWith("deals_")) {
-        let ownerDeals = JSON.parse(localStorage.getItem(key)) || [];
-        const dealIndex = ownerDeals.findIndex(d => d.id === selectedDeal.id);
-        
-        if (dealIndex !== -1) {
-          let currentQty = parseInt(ownerDeals[dealIndex].quantity) || 5;
-          currentQty -= claimedQty;
-          
-          if (currentQty <= 0) {
-            ownerDeals.splice(dealIndex, 1); 
-          } else {
-            ownerDeals[dealIndex].quantity = currentQty; 
-          }
-          localStorage.setItem(key, JSON.stringify(ownerDeals));
-          break;
-        }
+      const data = await response.json();
+      if (data.success) {
+        alert("✅ Booking cancelled successfully");
+        fetchBookingHistory();
+      } else {
+        alert(data.message || "Error cancelling booking");
       }
+    } catch (error) {
+      alert("Error cancelling booking: " + error.message);
     }
-
-    setAvailableDeals(prevDeals => prevDeals.map(d => {
-      if (d.id === selectedDeal.id) {
-        return { ...d, quantity: d.quantity - claimedQty };
-      }
-      return d;
-    }).filter(d => d.quantity > 0));
-
-    const newHistoryItem = {
-      id: Date.now(),
-      item: `${claimedQty}x ${selectedDeal.item}`, 
-      cafe: selectedDeal.cafeName,
-      date: new Date().toLocaleDateString(),
-      pointsEarned: pointsEarned
-    };
-    const updatedHistory = [newHistoryItem, ...history];
-    setHistory(updatedHistory);
-    localStorage.setItem(`history_${userName}`, JSON.stringify(updatedHistory));
-
-    const newPoints = points + pointsEarned;
-    setPoints(newPoints);
-    localStorage.setItem(`points_${userName}`, newPoints);
-
-    alert(`🎉 Success! You saved ${claimedQty} portion(s) and earned +${pointsEarned} Eco Points.`);
-    setIsModalOpen(false);
-    setSelectedDeal(null);
   };
 
-  const handleRemoveCafe = (cafeId) => {
-    const updatedCafes = savedCafes.filter(c => c.id !== cafeId);
-    setSavedCafes(updatedCafes);
-    localStorage.setItem(`saved_${userName}`, JSON.stringify(updatedCafes));
-  };
-
-  // 🟢 NAYA FIX: Jab tak session verify na ho, screen par error na dikhe
-  if (status === "loading" || !userName) return null;
+  if (status === "loading" || loading) {
+    return <div className="p-8 text-center">Loading...</div>;
+  }
 
   return (
-    <div style={styles.pageContainer}>
+    <>
       <Navbar />
-
-      <div style={styles.contentWrapper}>
-        <div style={styles.dashboardContainer}>
-          
-          {activeTab !== "home" && (
-            <button onClick={() => router.push("/user-dashboard?tab=home")} style={styles.backBtn}>
-              ← Back to Profile
-            </button>
-          )}
-
-          {activeTab === "home" && (
-            <>
-              <div style={styles.profileHeader}>
-                <div style={styles.avatar}>
-                  {userName ? userName.charAt(0).toUpperCase() : "U"}
+      <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 py-20">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Profile Header */}
+          <div className="bg-white rounded-2xl shadow-xl p-8 mb-8">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-6">
+                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-green-400 to-blue-500 flex items-center justify-center text-white text-3xl">
+                  👤
                 </div>
-                <h2 style={styles.userName}>{userName}</h2>
-                <div style={styles.pointsBadge}>⭐ {points} Eco Points</div>
+                <div>
+                  <h1 className="text-3xl font-bold text-gray-900">
+                    {userInfo?.name || session?.user?.name || "User Profile"}
+                  </h1>
+                  <p className="text-gray-600 mt-2">{userInfo?.email || session?.user?.email}</p>
+                </div>
               </div>
-
-              <div style={styles.menuCard}>
-                <button style={styles.menuItem} onClick={() => router.push("/")}>
-                  <div style={styles.iconBox}>🔍</div>
-                  <div style={styles.menuText}>
-                    <strong style={styles.menuTitle}>Explore Cafes</strong>
-                    <span style={styles.menuSub}>Find sustainable spots near you</span>
-                  </div>
-                  <span style={styles.arrow}>➔</span>
-                </button>
-
-                <button style={styles.menuItem} onClick={() => router.push("/surplus-alerts")}>
-                  <div style={styles.iconBox}>🍱</div>
-                  <div style={styles.menuText}>
-                    <strong style={styles.menuTitle}>Live Surplus Deals</strong>
-                    <span style={styles.menuSub}>Grab discounted food & save waste</span>
-                  </div>
-                  <span style={styles.badge}>{availableDeals.length} New</span>
-                </button>
-
-                <button style={styles.menuItem} onClick={() => router.push("/user-dashboard?tab=saved")}>
-                  <div style={styles.iconBox}>💚</div>
-                  <div style={styles.menuText}>
-                    <strong style={styles.menuTitle}>Saved Cafes</strong>
-                    <span style={styles.menuSub}>Your favorite eco-friendly spots</span>
-                  </div>
-                  <span style={styles.arrow}>➔</span>
-                </button>
-
-                <button style={{ ...styles.menuItem, borderBottom: "none" }} onClick={() => router.push("/user-dashboard?tab=history")}>
-                  <div style={styles.iconBox}>📜</div>
-                  <div style={styles.menuText}>
-                    <strong style={styles.menuTitle}>Activity & History</strong>
-                    <span style={styles.menuSub}>Track your past orders and impact</span>
-                  </div>
-                  <span style={styles.arrow}>➔</span>
-                </button>
+              <div className="text-right">
+                <div className="text-5xl font-bold text-green-600">{stats.pointsEarned}</div>
+                <p className="text-gray-600 font-semibold">Eco Points Earned</p>
               </div>
-            </>
-          )}
-
-          {activeTab === "deals" && (
-            <div style={styles.tabSection}>
-              <h2 style={styles.sectionTitle}>🍱 Active Food Alerts</h2>
-              {availableDeals.length === 0 ? (
-                <div style={styles.emptyState}>No active deals right now. Check back later!</div>
-              ) : (
-                availableDeals.map(deal => (
-                  <div key={deal.id} style={styles.dealCard}>
-                    <div style={styles.dealHeader}>
-                      <div>
-                        
-                        <h3 style={styles.dealItem}>
-                          {deal.item} 
-                          <span style={styles.dealQuantity}>
-                            {deal.quantity} Left
-                          </span>
-                        </h3>
-
-                        <div style={styles.dealMetaContainer}>
-                          <p onClick={() => router.push(`/cafe/${deal.cafeName}`)} style={styles.dealCafe}>
-                            📍 {deal.cafeName}
-                          </p>
-                          <p style={styles.dealTime}>
-                            🕒 Published at {deal.time || "Recently"}
-                          </p>
-                        </div>
-
-                      </div>
-                      <span style={styles.discountBadge}>{deal.discount}</span>
-                    </div>
-                    <button onClick={() => openClaimModal(deal)} style={styles.claimBtn}>
-                      Claim & Save Food
-                    </button>
-                  </div>
-                ))
-              )}
             </div>
-          )}
+          </div>
 
-          {activeTab === "saved" && (
-            <div style={styles.tabSection}>
-              <h2 style={styles.sectionTitle}>💚 My Saved Cafes</h2>
-              {savedCafes.length === 0 ? (
-                <div style={styles.emptyState}>You haven't saved any cafes yet.</div>
-              ) : (
-                savedCafes.map(cafe => (
-                  <div key={cafe.id} style={styles.savedCard}>
-                    <div>
-                      <strong onClick={() => router.push(`/cafe/${cafe.name}`)} style={styles.savedName}>
-                        {cafe.name}
-                      </strong>
-                      <span style={styles.savedScore}>⭐ Eco Score: {cafe.score}</span>
-                    </div>
-                    <button onClick={() => handleRemoveCafe(cafe.id)} style={styles.removeBtn}>
-                      Remove
-                    </button>
+          {/* Statistics Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-green-500">
+              <p className="text-gray-600 text-sm font-semibold">Total Bookings</p>
+              <h2 className="text-3xl font-bold text-gray-900 mt-2">{stats.totalBookings}</h2>
+            </div>
+            <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-blue-500">
+              <p className="text-gray-600 text-sm font-semibold">Total Spent</p>
+              <h2 className="text-3xl font-bold text-gray-900 mt-2">₹{stats.totalSpent}</h2>
+            </div>
+            <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-orange-500">
+              <p className="text-gray-600 text-sm font-semibold">Food Items</p>
+              <h2 className="text-3xl font-bold text-gray-900 mt-2">{stats.foodItemsClaimed}</h2>
+            </div>
+            <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-purple-500">
+              <p className="text-gray-600 text-sm font-semibold">Points Earned</p>
+              <h2 className="text-3xl font-bold text-gray-900 mt-2">
+                +{stats.pointsEarned}
+              </h2>
+            </div>
+          </div>
+
+          {/* Tabs */}
+          <div className="flex gap-4 mb-8">
+            <button
+              onClick={() => setActiveTab("overview")}
+              className={`px-6 py-3 rounded-lg font-semibold transition ${
+                activeTab === "overview"
+                  ? "bg-green-600 text-white shadow-lg"
+                  : "bg-white text-gray-700 shadow hover:shadow-lg"
+              }`}
+            >
+              📊 Overview
+            </button>
+            <button
+              onClick={() => setActiveTab("history")}
+              className={`px-6 py-3 rounded-lg font-semibold transition ${
+                activeTab === "history"
+                  ? "bg-green-600 text-white shadow-lg"
+                  : "bg-white text-gray-700 shadow hover:shadow-lg"
+              }`}
+            >
+              📜 Booking History
+            </button>
+            <button
+              onClick={() => setActiveTab("impact")}
+              className={`px-6 py-3 rounded-lg font-semibold transition ${
+                activeTab === "impact"
+                  ? "bg-green-600 text-white shadow-lg"
+                  : "bg-white text-gray-700 shadow hover:shadow-lg"
+              }`}
+            >
+              🌍 My Impact
+            </button>
+          </div>
+
+          {/* Content Sections */}
+          {activeTab === "overview" && (
+            <div className="bg-white rounded-2xl shadow-xl p-8">
+              <h2 className="text-2xl font-bold mb-6">Welcome to Your Dashboard 👋</h2>
+              <div className="grid md:grid-cols-2 gap-8">
+                <div>
+                  <h3 className="text-xl font-bold mb-4">🎯 Your Activity</h3>
+                  <ul className="space-y-3">
+                    <li className="flex items-center gap-3">
+                      <span className="text-2xl">📍</span>
+                      <span>{stats.totalBookings} total bookings made</span>
+                    </li>
+                    <li className="flex items-center gap-3">
+                      <span className="text-2xl">💰</span>
+                      <span>₹{stats.totalSpent} spent on bookings</span>
+                    </li>
+                    <li className="flex items-center gap-3">
+                      <span className="text-2xl">🍽️</span>
+                      <span>{stats.foodItemsClaimed} food items claimed</span>
+                    </li>
+                    <li className="flex items-center gap-3">
+                      <span className="text-2xl">⭐</span>
+                      <span>{stats.pointsEarned} eco points earned</span>
+                    </li>
+                  </ul>
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold mb-4">🌱 Eco Impact</h3>
+                  <p className="text-gray-700 mb-4">
+                    By using EcoKafe, you're making a real difference! Every booking and food claim reduces food waste and supports sustainable cafes.
+                  </p>
+                  <div className="bg-gradient-to-r from-green-100 to-blue-100 rounded-lg p-6">
+                    <p className="text-lg font-bold text-green-700">
+                      🌿 You've helped save food for {stats.foodItemsClaimed} meals!
+                    </p>
                   </div>
-                ))
-              )}
+                </div>
+              </div>
             </div>
           )}
 
           {activeTab === "history" && (
-            <div style={styles.tabSection}>
-              <h2 style={styles.sectionTitle}>📜 My Impact History</h2>
-              {history.length === 0 ? (
-                <div style={styles.emptyState}>No activity yet. Start claiming deals to save the planet!</div>
+            <div className="bg-white rounded-2xl shadow-xl p-8">
+              <h2 className="text-2xl font-bold mb-6">📜 Your Booking History</h2>
+              {bookingHistory.length === 0 ? (
+                <div className="text-center py-12">
+                  <p className="text-2xl">No bookings yet</p>
+                  <p className="text-gray-600 mt-2">Start by booking a table or claiming surplus food!</p>
+                </div>
               ) : (
-                history.map(item => (
-                  <div key={item.id} style={styles.historyCard}>
-                    <div>
-                      <h4 style={styles.historyItem}>{item.item}</h4>
-                      <p style={styles.historyMeta}>{item.cafe} • {item.date}</p>
+                <div className="space-y-4">
+                  {bookingHistory.map(booking => (
+                    <div
+                      key={booking._id}
+                      className="border rounded-xl p-6 hover:shadow-lg transition flex justify-between items-start bg-gradient-to-r from-gray-50 to-white"
+                    >
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <span className="text-2xl">
+                            {booking.bookingType === "Table" ? "🪑" : "🍽️"}
+                          </span>
+                          <h3 className="text-lg font-bold">
+                            {booking.bookingType === "Table"
+                              ? `Table Booking - ${booking.cafeId?.cafeName || "Unknown Cafe"}`
+                              : `Food Claim - ${booking.surplusFoodId?.itemName || "Surplus Food"}`}
+                          </h3>
+                        </div>
+                        <p className="text-gray-600 text-sm mb-3">
+                          {new Date(booking.createdAt).toLocaleDateString()} at{" "}
+                          {new Date(booking.createdAt).toLocaleTimeString()}
+                        </p>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                          <div>
+                            <p className="text-gray-600">Price</p>
+                            <p className="font-bold">₹{booking.totalPrice}</p>
+                          </div>
+                          <div>
+                            <p className="text-gray-600">Points Earned</p>
+                            <p className="font-bold text-green-600">+{booking.pointsEarned}</p>
+                          </div>
+                          <div>
+                            <p className="text-gray-600">Status</p>
+                            <p className="font-bold">
+                              <span
+                                className={`px-3 py-1 rounded-full text-xs font-bold ${
+                                  booking.status === "Completed"
+                                    ? "bg-green-100 text-green-700"
+                                    : booking.status === "Cancelled"
+                                    ? "bg-red-100 text-red-700"
+                                    : "bg-blue-100 text-blue-700"
+                                }`}
+                              >
+                                {booking.status}
+                              </span>
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-gray-600">Quantity</p>
+                            <p className="font-bold">{booking.quantityClaimed || 1}</p>
+                          </div>
+                        </div>
+                      </div>
+                      {booking.status === "Confirmed" && (
+                        <button
+                          onClick={() => handleCancelBooking(booking._id)}
+                          className="ml-4 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition font-semibold"
+                        >
+                          Cancel
+                        </button>
+                      )}
                     </div>
-                    <span style={styles.pointsGained}>+{item.pointsEarned} Pts</span>
-                  </div>
-                ))
+                  ))}
+                </div>
               )}
             </div>
           )}
 
+          {activeTab === "impact" && (
+            <div className="bg-white rounded-2xl shadow-xl p-8">
+              <h2 className="text-2xl font-bold mb-6">🌍 Your Environmental Impact</h2>
+              <div className="grid md:grid-cols-2 gap-8">
+                <div className="bg-gradient-to-br from-green-100 to-green-200 rounded-xl p-8 text-center">
+                  <p className="text-gray-700 font-semibold mb-2">Food Waste Prevented</p>
+                  <p className="text-5xl font-bold text-green-700">{stats.foodItemsClaimed}</p>
+                  <p className="text-gray-600 mt-2">items claimed and saved</p>
+                </div>
+                <div className="bg-gradient-to-br from-blue-100 to-blue-200 rounded-xl p-8 text-center">
+                  <p className="text-gray-700 font-semibold mb-2">CO₂ Offset</p>
+                  <p className="text-5xl font-bold text-blue-700">
+                    {(stats.foodItemsClaimed * 0.5).toFixed(1)}
+                  </p>
+                  <p className="text-gray-600 mt-2">kg equivalent reduced</p>
+                </div>
+                <div className="bg-gradient-to-br from-amber-100 to-amber-200 rounded-xl p-8 text-center">
+                  <p className="text-gray-700 font-semibold mb-2">Money Saved</p>
+                  <p className="text-5xl font-bold text-amber-700">₹{stats.totalSpent}</p>
+                  <p className="text-gray-600 mt-2">spent responsibly</p>
+                </div>
+                <div className="bg-gradient-to-br from-purple-100 to-purple-200 rounded-xl p-8 text-center">
+                  <p className="text-gray-700 font-semibold mb-2">Eco Points</p>
+                  <p className="text-5xl font-bold text-purple-700">{stats.pointsEarned}</p>
+                  <p className="text-gray-600 mt-2">badges earned</p>
+                </div>
+              </div>
+              <div className="mt-8 p-6 bg-green-50 border-2 border-green-200 rounded-xl text-center">
+                <p className="text-lg text-green-800 font-semibold">
+                  ✨ Keep up the amazing work! Every booking makes a difference for our planet. 🌱
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
       <Footer />
-
-      {isModalOpen && selectedDeal && (
-        <div style={styles.modalOverlay}>
-          <div style={styles.modalBox}>
-            <div style={styles.modalIcon}>🍱</div>
-            <h2 style={styles.modalTitle}>Select Quantity</h2>
-            <p style={styles.modalText}>How many portions of <strong>{selectedDeal.item}</strong> would you like to claim?</p>
-            
-            <div style={styles.quantityContainer}>
-              <button 
-                onClick={() => setSurplusQuantity(prev => Math.max(1, prev - 1))} 
-                style={styles.qtyBtn}
-              >
-                −
-              </button>
-              <span style={styles.qtyNumber}>{surplusQuantity}</span>
-              <button 
-                onClick={() => setSurplusQuantity(prev => Math.min(selectedDeal.quantity, prev + 1))} 
-                style={styles.qtyBtn}
-              >
-                +
-              </button>
-            </div>
-            <p style={{ color: "#94a3b8", fontSize: "0.85rem", marginTop: "-10px", marginBottom: "25px" }}>
-              Max {selectedDeal.quantity} available
-            </p>
-
-            <div style={styles.modalActions}>
-              <button onClick={() => setIsModalOpen(false)} style={styles.cancelBtn}>Cancel</button>
-              <button onClick={handleConfirmClaim} style={styles.confirmBtn}>
-                Claim {surplusQuantity} Item(s)
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-    </div>
+    </>
   );
 }
 
 export default function UserDashboard() {
   return (
-    <Suspense fallback={<div style={{ textAlign: "center", padding: "100px", fontSize: "1.2rem", color: "#00bfa5", marginTop: "100px" }}>Loading your dashboard... 🌿</div>}>
+    <Suspense fallback={<div>Loading...</div>}>
       <DashboardContent />
     </Suspense>
   );
 }
-
-const styles = {
-  pageContainer: { minHeight: "100vh", display: "flex", flexDirection: "column", backgroundColor: "#f4f7f6", fontFamily: "'Inter', sans-serif" },
-  contentWrapper: { flex: 1, padding: "100px 20px 60px 20px" },
-  dashboardContainer: { maxWidth: "650px", margin: "0 auto", width: "100%" },
-  backBtn: { background: "white", color: "#00bfa5", border: "1px solid #00bfa5", padding: "8px 16px", borderRadius: "20px", cursor: "pointer", fontWeight: "bold", fontSize: "0.95rem", marginBottom: "25px", display: "inline-flex", alignItems: "center", transition: "all 0.2s" },
-  profileHeader: { textAlign: "center", marginBottom: "40px", backgroundColor: "white", padding: "40px", borderRadius: "24px", boxShadow: "0 10px 30px rgba(0,0,0,0.05)" },
-  avatar: { width: "85px", height: "85px", borderRadius: "50%", backgroundColor: "#00bfa5", color: "white", fontSize: "2.5rem", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 15px auto", border: "4px solid #f0fdfa", boxShadow: "0 10px 20px rgba(0, 191, 165, 0.2)" },
-  userName: { color: "#0f172a", margin: "0 0 10px 0", fontSize: "1.8rem", fontWeight: "800", letterSpacing: "-0.5px" },
-  pointsBadge: { display: "inline-block", backgroundColor: "#fef3c7", color: "#d97706", padding: "8px 20px", borderRadius: "30px", fontWeight: "800", fontSize: "1.1rem", boxShadow: "0 4px 10px rgba(217, 119, 6, 0.15)" },
-  menuCard: { backgroundColor: "white", borderRadius: "24px", boxShadow: "0 10px 30px rgba(0,0,0,0.05)", overflow: "hidden" },
-  menuItem: { width: "100%", display: "flex", alignItems: "center", padding: "20px 25px", backgroundColor: "white", border: "none", borderBottom: "1px solid #f1f5f9", cursor: "pointer", transition: "background 0.2s", textAlign: "left" },
-  iconBox: { width: "45px", height: "45px", borderRadius: "12px", backgroundColor: "#f8fafc", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.3rem" },
-  menuText: { flex: 1, marginLeft: "15px" },
-  menuTitle: { display: "block", color: "#0f172a", fontSize: "1.1rem", fontWeight: "700", marginBottom: "3px" },
-  menuSub: { color: "#64748b", fontSize: "0.9rem" },
-  arrow: { color: "#cbd5e1", fontSize: "1.2rem", fontWeight: "bold" },
-  badge: { backgroundColor: "#f5a623", color: "white", padding: "4px 12px", borderRadius: "20px", fontSize: "0.85rem", fontWeight: "bold" },
-  tabSection: { animation: "fadeIn 0.3s ease" },
-  sectionTitle: { color: "#0f172a", marginBottom: "25px", fontSize: "1.6rem", fontWeight: "800", display: "flex", alignItems: "center", gap: "10px" },
-  emptyState: { textAlign: "center", color: "#64748b", backgroundColor: "white", padding: "40px", borderRadius: "20px", fontSize: "1rem", boxShadow: "0 10px 30px rgba(0,0,0,0.05)" },
-  
-  dealCard: { backgroundColor: "white", padding: "22px 25px", borderRadius: "16px", boxShadow: "0 8px 25px rgba(0,0,0,0.04)", border: "1px solid #e2e8f0", borderLeft: "6px solid #00bfa5", marginBottom: "20px" },
-  dealHeader: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "18px" },
-  dealItem: { margin: "0 0 10px 0", color: "#0f172a", fontSize: "1.25rem", fontWeight: "800", display: "flex", alignItems: "center", flexWrap: "wrap", gap: "10px" },
-  dealQuantity: { fontSize: "1rem", color: "#d97706", backgroundColor: "#fef3c7", padding: "4px 12px", borderRadius: "10px", fontWeight: "800", display: "inline-block" },
-  dealMetaContainer: { display: "flex", flexDirection: "column", gap: "4px" },
-  dealCafe: { margin: 0, color: "#475569", fontSize: "0.95rem", fontWeight: "600", cursor: "pointer", textDecoration: "underline", display: "inline-block" },
-  dealTime: { margin: 0, color: "#94a3b8", fontSize: "0.85rem", fontWeight: "500" },
-  discountBadge: { backgroundColor: "#fee2e2", color: "#ef4444", padding: "6px 12px", borderRadius: "10px", fontWeight: "800", fontSize: "0.9rem" },
-  claimBtn: { width: "100%", padding: "14px", backgroundColor: "#00bfa5", color: "white", border: "none", borderRadius: "12px", fontWeight: "800", cursor: "pointer", fontSize: "1.05rem", boxShadow: "0 4px 12px rgba(0, 191, 165, 0.25)", transition: "transform 0.1s" },
-  
-  savedCard: { display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "white", padding: "20px 25px", borderRadius: "20px", boxShadow: "0 10px 30px rgba(0,0,0,0.05)", marginBottom: "15px" },
-  savedName: { display: "block", color: "#0f172a", fontSize: "1.15rem", cursor: "pointer", fontWeight: "800", textDecoration: "underline", marginBottom: "5px" },
-  savedScore: { color: "#00bfa5", fontSize: "0.95rem", fontWeight: "700" },
-  removeBtn: { background: "#fee2e2", color: "#ef4444", border: "none", padding: "10px 16px", borderRadius: "10px", cursor: "pointer", fontWeight: "700", fontSize: "0.9rem" },
-  historyCard: { display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "white", padding: "20px 25px", borderRadius: "20px", boxShadow: "0 10px 30px rgba(0,0,0,0.05)", marginBottom: "15px", borderLeft: "6px solid #00bfa5" },
-  historyItem: { margin: "0 0 5px 0", color: "#0f172a", fontSize: "1.1rem", fontWeight: "700" },
-  historyMeta: { margin: 0, color: "#64748b", fontSize: "0.9rem" },
-  pointsGained: { backgroundColor: "#f0fdfa", color: "#00bfa5", border: "1px solid #ccfbf1", padding: "8px 14px", borderRadius: "20px", fontWeight: "800", fontSize: "0.95rem" },
-  
-  modalOverlay: { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 },
-  modalBox: { backgroundColor: "white", padding: "40px", borderRadius: "24px", width: "90%", maxWidth: "450px", textAlign: "center", boxShadow: "0 25px 50px rgba(0,0,0,0.15)", animation: "fadeIn 0.3s ease" },
-  modalIcon: { fontSize: "3rem", marginBottom: "15px" },
-  modalTitle: { margin: "0 0 15px 0", color: "#1e293b", fontSize: "1.6rem", fontWeight: "800" },
-  modalText: { color: "#64748b", lineHeight: "1.6", marginBottom: "20px", fontSize: "1.05rem" },
-  quantityContainer: { display: "flex", justifyContent: "center", alignItems: "center", gap: "20px", marginBottom: "20px" },
-  qtyBtn: { width: "40px", height: "40px", borderRadius: "50%", border: "none", backgroundColor: "#f1f5f9", fontSize: "1.4rem", fontWeight: "bold", color: "#334155", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.2s" },
-  qtyNumber: { fontSize: "1.6rem", fontWeight: "800", color: "#1e293b", minWidth: "30px" },
-  modalActions: { display: "flex", gap: "15px", justifyContent: "center" },
-  cancelBtn: { flex: 1, backgroundColor: "#f1f5f9", color: "#475569", border: "none", padding: "12px", borderRadius: "12px", fontSize: "1rem", fontWeight: "bold", cursor: "pointer" },
-  confirmBtn: { flex: 1, backgroundColor: "#f5a623", color: "white", border: "none", padding: "12px", borderRadius: "12px", fontSize: "1rem", fontWeight: "bold", cursor: "pointer", boxShadow: "0 4px 10px rgba(245, 166, 35, 0.3)" }
-};

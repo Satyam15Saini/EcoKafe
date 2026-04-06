@@ -9,13 +9,12 @@ import Footer from "../../Components/Footer";
 export default function OwnerDashboard() {
   const { data: session, status } = useSession();
   const router = useRouter(); 
-  
-  const userName = session?.user?.name;
 
-  const [itemName, setItemName] = useState("");
-  const [discount, setDiscount] = useState("");
-  const [quantity, setQuantity] = useState(""); 
-  const [deals, setDeals] = useState([]);
+  const [cafe, setCafe] = useState(null);
+  const [surplusFoods, setSurplusFoods] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("overview");
+  const [showAddFood, setShowAddFood] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -24,213 +23,355 @@ export default function OwnerDashboard() {
   }, [status, router]);
 
   useEffect(() => {
-    if (!userName) return;
-    
-    const interval = setInterval(() => {
-      const storedDeals = JSON.parse(localStorage.getItem(`deals_${userName}`)) || [];
-      setDeals(storedDeals);
-    }, 2000);
-
-    const storedDeals = JSON.parse(localStorage.getItem(`deals_${userName}`)) || [];
-    setDeals(storedDeals);
-
-    return () => clearInterval(interval);
-  }, [userName]); 
-
-  const handlePublish = (e) => {
-    e.preventDefault();
-    if (!itemName || !discount || !userName || !quantity) return;
-
-    let finalDiscount = discount.trim();
-    if (/^\d+$/.test(finalDiscount)) {
-      finalDiscount = `${finalDiscount}% OFF`;
+    if (status === "authenticated") {
+      fetchCafeData();
     }
+  }, [status]);
 
-    const newDeal = {
-      id: Date.now(),
-      item: itemName,
-      discount: finalDiscount,
-      quantity: parseInt(quantity),
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const fetchCafeData = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(`/api/cafes?ownerId=${session.user.id}`);
+      const data = await response.json();
+      
+      if (data.success && data.data.length > 0) {
+        const cafeData = data.data[0];
+        setCafe(cafeData);
+        fetchSurplusFoods(cafeData._id);
+      } else {
+        setCafe(null);
+      }
+    } catch (error) {
+      console.error("Error fetching cafe:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchSurplusFoods = async (cafeId) => {
+    try {
+      const response = await fetch(`/api/cafes/${cafeId}/surplus`);
+      const data = await response.json();
+      if (data.success) {
+        setSurplusFoods(data.data);
+      }
+    } catch (error) {
+      console.error("Error fetching surplus foods:", error);
+    }
+  };
+
+  const handleAddFood = async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    
+    const newFood = {
+      itemName: formData.get("itemName"),
+      description: formData.get("description"),
+      category: formData.get("category"),
+      quantityAvailable: parseInt(formData.get("quantity")),
+      originalPrice: parseFloat(formData.get("originalPrice")),
+      discountedPrice: parseFloat(formData.get("discountedPrice")),
+      isOrganic: formData.get("isOrganic") === "on",
+      isLocallySourced: formData.get("isLocallySourced") === "on",
+      availableUntil: new Date(Date.now() + 24 * 60 * 60 * 1000)
     };
 
-    const updatedDeals = [newDeal, ...deals];
-    setDeals(updatedDeals);
-    localStorage.setItem(`deals_${userName}`, JSON.stringify(updatedDeals));
+    try {
+      const response = await fetch(`/api/cafes/${cafe._id}/surplus`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newFood)
+      });
 
-    setItemName("");
-    setDiscount("");
-    setQuantity(""); 
+      const data = await response.json();
+      if (data.success) {
+        setSurplusFoods([data.data, ...surplusFoods]);
+        e.target.reset();
+        setShowAddFood(false);
+        alert("✅ Surplus food added successfully!");
+      } else {
+        alert(data.message);
+      }
+    } catch (error) {
+      alert("Error adding food: " + error.message);
+    }
   };
 
-  const handleSoldOut = (id) => {
-    const updatedDeals = deals.filter(d => d.id !== id);
-    setDeals(updatedDeals);
-    localStorage.setItem(`deals_${userName}`, JSON.stringify(updatedDeals));
+  const handleDeleteFood = async (foodId) => {
+    if (confirm("Are you sure you want to delete this item?")) {
+      try {
+        const response = await fetch(`/api/cafes/${cafe._id}/surplus/${foodId}`, {
+          method: "DELETE"
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          setSurplusFoods(surplusFoods.filter(f => f._id !== foodId));
+          alert("✅ Item deleted successfully!");
+        } else {
+          alert(data.message);
+        }
+      } catch (error) {
+        alert("Error deleting food: " + error.message);
+      }
+    }
   };
 
-  // 🟢 NAYA FIX: Edit Function
-  const handleEdit = (deal) => {
-    // 1. Form ke andar wapas purana data daal do
-    setItemName(deal.item);
-    setDiscount(deal.discount.replace('% OFF', '').trim());
-    setQuantity(deal.quantity ? deal.quantity.toString() : "1");
-    
-    // 2. Niche list se us deal ko hata do taaki duplicate na bane
-    handleSoldOut(deal.id);
+  const handleUpdateFood = async (foodId, updates) => {
+    try {
+      const response = await fetch(`/api/cafes/${cafe._id}/surplus/${foodId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates)
+      });
 
-    // 3. Screen ko thoda upar scroll kar do taaki form dikh jaye
-    window.scrollTo({ top: 0, behavior: "smooth" });
+      const data = await response.json();
+      if (data.success) {
+        setSurplusFoods(surplusFoods.map(f => f._id === foodId ? data.data : f));
+        alert("✅ Updated successfully!");
+      } else {
+        alert(data.message);
+      }
+    } catch (error) {
+      alert("Error updating food: " + error.message);
+    }
   };
 
-  if (status === "loading" || !userName) return null;
+  const handleCreateCafe = async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+
+    const newCafe = {
+      cafeName: formData.get("cafeName"),
+      email: formData.get("email"),
+      phone: formData.get("phone"),
+      address: formData.get("address"),
+      city: formData.get("city"),
+      pincode: formData.get("pincode"),
+      description: formData.get("description"),
+      cuisineType: formData.get("cuisineType").split(",").map(c => c.trim()),
+      ecoRating: parseInt(formData.get("ecoRating")) || 0,
+      openingTime: formData.get("openingTime"),
+      closingTime: formData.get("closingTime"),
+      totalTables: parseInt(formData.get("totalTables"))
+    };
+
+    try {
+      const response = await fetch("/api/cafes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newCafe)
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setCafe(data.data);
+        setActiveTab("overview");
+        alert("✅ Cafe created successfully!");
+      } else {
+        alert(data.message);
+      }
+    } catch (error) {
+      alert("Error creating cafe: " + error.message);
+    }
+  };
+
+  if (loading) return <div className="p-8 text-center">Loading...</div>;
 
   return (
-    <div style={styles.pageContainer}>
+    <>
       <Navbar />
+      <div className="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-teal-50 p-8">
+        <div className="max-w-6xl mx-auto">
+          <h1 className="text-4xl font-bold text-green-700 mb-8">🏪 Cafe Owner Dashboard</h1>
 
-      <div style={styles.contentWrapper}>
-        <div style={styles.topFlex}>
-          <div>
-            <h1 style={styles.heroTitle}>🏪 {userName}'s Portal</h1>
-            <p style={styles.heroSubtitle}>Track your surplus inventory and environmental impact.</p>
-          </div>
-          <div style={styles.dateBadge}>Business Status: Active 🟢</div>
-        </div>
-
-        <div style={styles.metricsRow}>
-          <div style={styles.statCard}>
-            <p style={styles.statLabel}>Active Surplus Deals</p>
-            <h2 style={styles.statValue}>{deals.length}</h2>
-            <p style={styles.statChange}>Live on platform</p>
-          </div>
-          <div style={styles.statCard}>
-            <p style={styles.statLabel}>Food Waste Recovered</p>
-            <h2 style={styles.statValue}>42.5 <span style={styles.statUnit}>kg</span></h2>
-            <p style={styles.statChange}>↑ 8% this week</p>
-          </div>
-          <div style={styles.statCard}>
-            <p style={styles.statLabel}>Estimated Savings</p>
-            <h2 style={styles.statValue}>₹4,200</h2>
-            <p style={{ ...styles.statChange, color: '#10b981' }}>Recovered Revenue</p>
-          </div>
-        </div>
-
-        <div style={styles.gridContainer}>
-          <div style={styles.glassCard}>
-            <h2 style={styles.cardTitle}>Publish New Alert</h2>
-            <p style={styles.cardSubtitle}>Instantly notify nearby eco-conscious customers.</p>
-
-            <form onSubmit={handlePublish} style={styles.form}>
-              <div style={styles.inputGroup}>
-                <label style={styles.label}>Item Name</label>
-                <input type="text" placeholder="e.g. Paneer Patties" value={itemName} onChange={(e) => setItemName(e.target.value)} style={styles.input} required />
+          {!cafe ? (
+            <div className="bg-white rounded-lg shadow-lg p-8">
+              <h2 className="text-2xl font-bold mb-6">Register Your Cafe</h2>
+              <form onSubmit={handleCreateCafe} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <input type="text" name="cafeName" placeholder="Cafe Name" required className="border p-2 rounded" />
+                  <input type="email" name="email" placeholder="Email" required className="border p-2 rounded" />
+                  <input type="tel" name="phone" placeholder="Phone" required className="border p-2 rounded" />
+                  <input type="text" name="address" placeholder="Address" required className="border p-2 rounded" />
+                  <input type="text" name="city" placeholder="City" required className="border p-2 rounded" />
+                  <input type="text" name="pincode" placeholder="Pincode" required className="border p-2 rounded" />
+                  <input type="text" name="cuisineType" placeholder="Cuisine Types (comma separated)" required className="border p-2 rounded col-span-2" />
+                  <textarea name="description" placeholder="Cafe Description" className="border p-2 rounded col-span-2" />
+                  <input type="number" name="ecoRating" placeholder="Eco Rating (0-100)" min="0" max="100" className="border p-2 rounded" />
+                  <input type="number" name="totalTables" placeholder="Total Tables" required className="border p-2 rounded" />
+                  <input type="time" name="openingTime" defaultValue="09:00" className="border p-2 rounded" />
+                  <input type="time" name="closingTime" defaultValue="21:00" className="border p-2 rounded" />
+                </div>
+                <button type="submit" className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg w-full">
+                  Create Cafe
+                </button>
+              </form>
+            </div>
+          ) : (
+            <div>
+              <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+                <h2 className="text-2xl font-bold mb-4">{cafe.cafeName}</h2>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div>
+                    <p className="text-gray-600">📍 City</p>
+                    <p className="font-bold">{cafe.city}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">⏰ Hours</p>
+                    <p className="font-bold">{cafe.openingTime} - {cafe.closingTime}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">🌿 Eco Rating</p>
+                    <p className="font-bold">{cafe.ecoRating}/100</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">🪑 Total Tables</p>
+                    <p className="font-bold">{cafe.totalTables}</p>
+                  </div>
+                </div>
               </div>
 
-              <div style={styles.inputRow}>
-                <div style={styles.inputGroup}>
-                  <label style={styles.label}>Quantity (Portions)</label>
-                  <input type="number" min="1" placeholder="e.g. 5" value={quantity} onChange={(e) => setQuantity(e.target.value)} style={styles.input} required />
-                </div>
-
-                <div style={styles.inputGroup}>
-                  <label style={styles.label}>Discount Value</label>
-                  <input type="text" placeholder="e.g. 70" value={discount} onChange={(e) => setDiscount(e.target.value)} style={styles.input} required />
-                </div>
+              <div className="flex space-x-4 mb-6">
+                <button
+                  onClick={() => setActiveTab("overview")}
+                  className={`px-4 py-2 rounded-lg ${activeTab === "overview" ? "bg-green-600 text-white" : "bg-white"}`}
+                >
+                  Surplus Food
+                </button>
+                <button
+                  onClick={() => setActiveTab("stats")}
+                  className={`px-4 py-2 rounded-lg ${activeTab === "stats" ? "bg-green-600 text-white" : "bg-white"}`}
+                >
+                  Stats
+                </button>
               </div>
 
-              <button type="submit" style={styles.publishBtn}>
-                Publish Deal
-              </button>
-            </form>
-          </div>
-
-          <div style={styles.inventorySection}>
-            <h2 style={styles.cardTitle}>Live Inventory Status</h2>
-            {deals.length === 0 ? (
-              <div style={styles.emptyState}>No active broadcasts. Start saving food!</div>
-            ) : (
-              <div style={styles.dealsList}>
-                {deals.map(deal => (
-                  <div key={deal.id} style={styles.dealItem}>
-                    <div style={styles.dealInfo}>
-                      
-                      <h4 style={{ ...styles.itemName, display: "flex", alignItems: "center" }}>
-                        {deal.item} 
-                        <span style={{
-                          fontSize: "1.1rem", 
-                          color: "#d97706", 
-                          backgroundColor: "#fef3c7", 
-                          padding: "4px 12px", 
-                          borderRadius: "12px", 
-                          marginLeft: "12px", 
-                          fontWeight: "800"
-                        }}>
-                          {deal.quantity || 1} Left
-                        </span>
-                      </h4>
-
-                      <div style={styles.itemMeta}>
-                        <span style={styles.discountTag}>{deal.discount}</span>
-                        <span style={styles.timeTag}>🕒 {deal.time}</span>
-                      </div>
+              {activeTab === "overview" && (
+                <div>
+                  {showAddFood ? (
+                    <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+                      <h3 className="text-xl font-bold mb-4">Add Surplus Food</h3>
+                      <form onSubmit={handleAddFood} className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <input type="text" name="itemName" placeholder="Item Name" required className="border p-2 rounded" />
+                          <select name="category" className="border p-2 rounded">
+                            <option>Vegan</option>
+                            <option>Vegetarian</option>
+                            <option>Non-Veg</option>
+                            <option>Bakery</option>
+                            <option>Beverage</option>
+                          </select>
+                          <input type="number" name="quantity" placeholder="Quantity Available" required min="1" className="border p-2 rounded" />
+                          <input type="number" name="originalPrice" placeholder="Original Price" required step="0.01" className="border p-2 rounded" />
+                          <input type="number" name="discountedPrice" placeholder="Discounted Price" required step="0.01" className="border p-2 rounded" />
+                          <input type="text" name="description" placeholder="Description" className="border p-2 rounded col-span-2" />
+                          <label className="flex items-center">
+                            <input type="checkbox" name="isOrganic" className="mr-2" />
+                            <span>Is Organic?</span>
+                          </label>
+                          <label className="flex items-center">
+                            <input type="checkbox" name="isLocallySourced" className="mr-2" />
+                            <span>Locally Sourced?</span>
+                          </label>
+                        </div>
+                        <div className="flex space-x-4">
+                          <button type="submit" className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">
+                            Add Item
+                          </button>
+                          <button type="button" onClick={() => setShowAddFood(false)} className="flex-1 bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded">
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
                     </div>
-                    {/* 🟢 NAYA FIX: Edit button add kiya yahan */}
-                    <div style={{ display: "flex", gap: "10px" }}>
-                      <button onClick={() => handleEdit(deal)} style={styles.editBtn}>
-                        ✎ Edit
-                      </button>
-                      <button onClick={() => handleSoldOut(deal.id)} style={styles.soldBtn}>
-                        Mark Sold Out
-                      </button>
+                  ) : (
+                    <button
+                      onClick={() => setShowAddFood(true)}
+                      className="mb-6 bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg"
+                    >
+                      ➕ Add Surplus Food
+                    </button>
+                  )}
+
+                  <div className="space-y-4">
+                    {surplusFoods.length === 0 ? (
+                      <p className="text-gray-500 text-center py-8">No surplus food items yet. Add one to get started!</p>
+                    ) : (
+                      surplusFoods.map(food => (
+                        <div key={food._id} className="bg-white rounded-lg shadow-lg p-6">
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <h3 className="text-xl font-bold">{food.itemName}</h3>
+                              <p className="text-gray-600">{food.description}</p>
+                              <div className="grid grid-cols-3 gap-4 mt-4">
+                                <div>
+                                  <p className="text-sm text-gray-600">Category</p>
+                                  <p className="font-bold">{food.category}</p>
+                                </div>
+                                <div>
+                                  <p className="text-sm text-gray-600">Available</p>
+                                  <p className="font-bold">{food.quantityAvailable} units</p>
+                                </div>
+                                <div>
+                                  <p className="text-sm text-gray-600">Price</p>
+                                  <p className="font-bold">₹{food.discountedPrice} (₹{food.originalPrice})</p>
+                                </div>
+                              </div>
+                              <p className="text-sm mt-2">
+                                {food.isOrganic && "🌱 Organic "}
+                                {food.isLocallySourced && "🏘️ Locally Sourced"}
+                              </p>
+                            </div>
+                            <div className="flex space-x-2">
+                              <button
+                                onClick={() => {
+                                  const newQty = prompt("New quantity:", food.quantityAvailable);
+                                  if (newQty) handleUpdateFood(food._id, { quantityAvailable: parseInt(newQty) });
+                                }}
+                                className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleDeleteFood(food._id)}
+                                className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {activeTab === "stats" && (
+                <div className="bg-white rounded-lg shadow-lg p-6">
+                  <h3 className="text-xl font-bold mb-4">📊 Dashboard Stats</h3>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="text-center">
+                      <p className="text-gray-600">Total Items</p>
+                      <p className="text-3xl font-bold">{surplusFoods.length}</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-gray-600">Total Booked</p>
+                      <p className="text-3xl font-bold">{surplusFoods.reduce((acc, f) => acc + (f.totalBooked || 0), 0)}</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-gray-600">Available Now</p>
+                      <p className="text-3xl font-bold">{surplusFoods.reduce((acc, f) => acc + f.quantityAvailable, 0)}</p>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
       <Footer />
-    </div>
+    </>
   );
 }
-
-const styles = {
-  pageContainer: { minHeight: "100vh", backgroundColor: "#f8fafc", color: "#0f172a", fontFamily: "'Inter', sans-serif" },
-  contentWrapper: { maxWidth: "1200px", margin: "0 auto", padding: "120px 24px" },
-  topFlex: { display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "40px" },
-  heroTitle: { fontSize: "2.2rem", fontWeight: "800", margin: 0, letterSpacing: "-1px" },
-  heroSubtitle: { color: "#64748b", fontSize: "1.1rem", margin: "5px 0 0 0" },
-  dateBadge: { backgroundColor: "white", padding: "8px 16px", borderRadius: "10px", fontSize: "0.9rem", fontWeight: "700", color: "#10b981", border: "1px solid #e2e8f0" },
-  metricsRow: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "24px", marginBottom: "30px" },
-  statCard: { backgroundColor: "white", padding: "24px", borderRadius: "20px", border: "1px solid #e2e8f0", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.05)" },
-  statLabel: { color: "#64748b", fontSize: "0.9rem", fontWeight: "600", marginBottom: "10px" },
-  statValue: { fontSize: "1.8rem", fontWeight: "800", margin: 0 },
-  statUnit: { fontSize: "1rem", color: "#94a3b8" },
-  statChange: { fontSize: "0.85rem", fontWeight: "500", marginTop: "8px", color: "#64748b" },
-  gridContainer: { display: "grid", gridTemplateColumns: "1fr 1.5fr", gap: "30px", alignItems: "start" },
-  glassCard: { backgroundColor: "white", padding: "35px", borderRadius: "24px", border: "1px solid #e2e8f0", boxShadow: "0 10px 15px -3px rgba(0,0,0,0.05)" },
-  cardTitle: { fontSize: "1.3rem", fontWeight: "800", margin: "0 0 10px 0" },
-  cardSubtitle: { color: "#64748b", fontSize: "0.95rem", marginBottom: "30px" },
-  form: { display: "flex", flexDirection: "column", gap: "20px" },
-  inputRow: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" },
-  inputGroup: { display: "flex", flexDirection: "column", gap: "8px" },
-  label: { fontSize: "0.9rem", fontWeight: "700", color: "#334155" },
-  input: { padding: "14px", borderRadius: "12px", border: "1px solid #cbd5e1", backgroundColor: "#f8fafc", fontSize: "1rem", outline: "none" },
-  publishBtn: { backgroundColor: "#f5a623", color: "white", border: "none", padding: "16px", borderRadius: "12px", fontSize: "1.1rem", fontWeight: "800", cursor: "pointer", boxShadow: "0 4px 12px rgba(245, 166, 35, 0.2)", marginTop: "10px" },
-  inventorySection: { backgroundColor: "white", padding: "30px", borderRadius: "24px", border: "1px solid #e2e8f0" },
-  dealsList: { display: "flex", flexDirection: "column", gap: "15px", marginTop: "20px" },
-  dealItem: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px", borderRadius: "16px", backgroundColor: "#f8fafc", border: "1px solid #e2e8f0" },
-  dealInfo: { flex: 1 },
-  itemName: { margin: "0 0 5px 0", fontSize: "1.1rem", fontWeight: "700" },
-  itemMeta: { display: "flex", gap: "12px", alignItems: "center", marginTop: "8px" },
-  discountTag: { color: "#ef4444", fontWeight: "800", fontSize: "0.9rem", backgroundColor: "#fee2e2", padding: "4px 10px", borderRadius: "8px" },
-  timeTag: { color: "#64748b", fontSize: "0.9rem", fontWeight: "600" },
-  
-  // 🟢 NAYA FIX: Edit aur Sold buttons ki styling
-  soldBtn: { backgroundColor: "white", border: "1px solid #e2e8f0", padding: "10px 18px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", color: "#64748b", transition: "all 0.2s" },
-  editBtn: { backgroundColor: "#f1f5f9", border: "1px solid #cbd5e1", padding: "10px 18px", borderRadius: "10px", fontWeight: "700", cursor: "pointer", color: "#3b82f6", transition: "all 0.2s" },
-  
-  emptyState: { padding: "40px", textAlign: "center", color: "#94a3b8", border: "2px dashed #e2e8f0", borderRadius: "20px" }
-};

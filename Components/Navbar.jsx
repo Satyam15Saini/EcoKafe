@@ -86,6 +86,11 @@ export default function Navbar() {
             <button onClick={handleCafesClick} style={styles.link}>Cafes</button>
             <button onClick={() => router.push("/about")} style={styles.link}>About</button>
             
+            {/* 🟢 NAYA FIX: AI Recommendations Feature */}
+            <button onClick={() => router.push("/ai-recommendations")} style={styles.link}>
+              🤖 AI Guide
+            </button>
+            
             {/* 🟢 NAYA FIX: Navbar mein Login Guard laga diya */}
             <button onClick={() => {
               if (!user) {

@@ -14,7 +14,7 @@ EcoKafe is a modern, AI-driven web application designed to connect eco-conscious
 * **Framework:** Next.js (App Router)
 * **Library:** React.js 
 * **Data Visualization:** Chart.js & `react-chartjs-2` (Admin Analytics)
-* **Styling:** Custom CSS-in-JS (Inline styling)
+* **Styling:** Modern CSS with Glassmorphism, Animations & Responsive Design
 * **Routing:** Next.js built-in `useRouter` and `useSearchParams` (with React Suspense Boundaries)
 
 ### **Backend & Authentication**
@@ -24,7 +24,7 @@ EcoKafe is a modern, AI-driven web application designed to connect eco-conscious
 
 ### **Database & AI Integration**
 * **Database:** MongoDB (via Mongoose) - *Used for secure credential storage and user management*
-* **AI Engine:** Google Generative AI SDK (`@google/generative-ai` - Gemini 2.5 Flash) - *Used for dynamic, parameter-based JSON cafe filtering*
+* **AI Engine:** Google Generative AI SDK (`@google/generative-ai` - Gemini) - *Used for smart cafe filtering and personalized recommendation generation*
 * **Client-side Caching:** Browser LocalStorage - *Used for fast, low-latency UI rendering of user history and points*
 
 ### **Deployment & Version Control**
@@ -36,6 +36,7 @@ EcoKafe is a modern, AI-driven web application designed to connect eco-conscious
 
 ### 👤 User Features
 * **AI Smart Search:** Filter cafes based on location, search terms, and strict eco-features (Vegan, Composting, Zero Plastic) using Google Gemini.
+* **AI Recommendation Engine:** Personalized cafe recommendations based on dietary preferences, budget, location, and sustainability values with detailed eco-impact metrics.
 * **Surplus Food Alerts:** Claim high-quality leftover food at heavily discounted rates to prevent food waste.
 * **Gamified Sustainability:** Earn and track "Eco Points" and view personal environmental impact history.
 * **Saved Cafes:** Bookmark favorite sustainable spots.
