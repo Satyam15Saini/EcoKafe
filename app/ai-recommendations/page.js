@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import Navbar from '../../Components/Navbar';
+import Footer from '../../Components/Footer';
 import './style.css';
 
 export default function AIRecommendationsPage() {
@@ -101,7 +103,9 @@ export default function AIRecommendationsPage() {
 
   if (results) {
     return (
-      <div className="ai-recommendations-container">
+      <>
+        <Navbar />
+        <div className="ai-recommendations-container">
         <section className="results-section">
           <div className="results-wrapper">
             <div className="results-header">
@@ -181,11 +185,15 @@ export default function AIRecommendationsPage() {
           </div>
         </section>
       </div>
+      <Footer />
+      </>
     );
   }
 
   return (
-    <div className="ai-recommendations-container">
+    <>
+      <Navbar />
+      <div className="ai-recommendations-container">
       {/* Hero Section */}
       <section className="hero-section">
         <div className="hero-background">
@@ -383,5 +391,7 @@ export default function AIRecommendationsPage() {
         </div>
       )}
     </div>
+    <Footer />
+    </>
   );
 }

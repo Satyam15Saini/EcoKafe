@@ -1,6 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* CSS Variables - Theme Configuration */
+:root {
+  --color-primary: #00bfa5;
+  --color-primary-dark: #00897b;
+  --color-primary-light: #26c6da;
+  
+  --color-accent: #1b5e20;
+  --color-accent-light: #2e7d32;
+  
+  --color-text-primary: #f8fafc;
+  --color-text-secondary: #cbd5e1;
+  --color-text-tertiary: #94a3b8;
+  
+  --color-border: rgba(255, 255, 255, 0.1);
+  --color-border-accent: rgba(0, 191, 165, 0.3);
+  
+  --transition-fast: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-smooth: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  
+  --radius-xl: 20px;
+}
+
+/* Animations */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 body {
   background: #f1f8f4;
   font-family: Arial, sans-serif;
+}
+
+/* Hero Section Styles */
+.hero-section {
+  position: relative;
+  padding: 80px 20px;
+  overflow: hidden;
+}
+
+.hero-title {
+  font-size: clamp(2.5rem, 8vw, 4.5rem);
+  font-weight: 800;
+  color: #00897b;
+  line-height: 1.2;
+  margin-bottom: 16px;
+}
+
+.hero-subtitle {
+  font-size: 1.2rem;
+  color: #555;
+  max-width: 600px;
+  margin: 0 auto;
+  line-height: 1.6;
 }
 
 .auth-container {
