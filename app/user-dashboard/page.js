@@ -1,176 +1,393 @@
-"use client";
-import React, { useState } from "react";
-import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
-import Navbar from "../../Components/Navbar";
-import Footer from "../../Components/Footer";
+"use client"; 
 
-export default function UserDashboard() {
-  const { data: session, status } = useSession();
+import { useRouter, useSearchParams } from "next/navigation"; 
+import { useState, useEffect, Suspense } from "react"; 
+import { useSession } from "next-auth/react"; 
+import Navbar from "../../Components/Navbar"; 
+import Footer from "../../Components/Footer"; 
+
+function DashboardContent() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState("overview");
+  const searchParams = useSearchParams(); 
+  // 🟢 NAYA FIX: status extract kiya auth check ke liye
+  const { data: session, status } = useSession();
+  
+  const userName = session?.user?.name;
 
-  // Loading state
-  if (status === "loading") {
-    return <div style={styles.loader}>Loading your green journey... 🌿</div>;
-  }
+  const [activeTab, setActiveTab] = useState("home"); 
+  const [points, setPoints] = useState(350);
+  const [savedCafes, setSavedCafes] = useState([]);
+  const [history, setHistory] = useState([]);
+  const [availableDeals, setAvailableDeals] = useState([]);
 
-  // Protection: Agar login nahi hai toh wapas bhej do
-  if (status === "unauthenticated") {
-    router.push("/login");
-    return null;
-  }
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedDeal, setSelectedDeal] = useState(null);
+  const [surplusQuantity, setSurplusQuantity] = useState(1);
 
-  const user = session?.user;
+  // 🟢 NAYA FIX: Security Guard (Redirect unauthenticated users)
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.push("/login");
+    }
+  }, [status, router]);
+
+  useEffect(() => {
+    const tabParam = searchParams.get("tab");
+    if (tabParam) {
+      setActiveTab(tabParam);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!userName) return;
+
+    const storedPoints = localStorage.getItem(`points_${userName}`);
+    if (storedPoints) setPoints(parseInt(storedPoints));
+
+    const storedSaved = JSON.parse(localStorage.getItem(`saved_${userName}`));
+    if (storedSaved) setSavedCafes(storedSaved);
+    else setSavedCafes([{ id: 1, name: "Green Leaf Cafe", score: 92 }, { id: 2, name: "Sustainable Sip", score: 95 }]);
+
+    const storedHistory = JSON.parse(localStorage.getItem(`history_${userName}`));
+    if (storedHistory) setHistory(storedHistory);
+    else setHistory([{ id: 1001, item: "Organic Coffee", cafe: "Eco Brew Hub", date: "Oct 24", pointsEarned: 10 }]);
+
+    let realDeals = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith("deals_")) {
+        const ownerName = key.split("_")[1];
+        const ownerDeals = JSON.parse(localStorage.getItem(key)) || [];
+        ownerDeals.forEach(deal => {
+          realDeals.push({ ...deal, cafeName: `${ownerName.toUpperCase()}'s Cafe`, quantity: deal.quantity || 5 });
+        });
+      }
+    }
+
+    if (realDeals.length === 0) {
+      realDeals = [
+        { id: 901, item: "Vegan Wrap", discount: "40% OFF", cafeName: "Green Leaf Cafe", quantity: 2, time: "10:30 AM" },
+        { id: 902, item: "Surplus Muffins", discount: "50% OFF", cafeName: "Eco Brew Hub", quantity: 5, time: "11:15 AM" }
+      ];
+    }
+    setAvailableDeals(realDeals);
+
+  }, [userName]);
+
+  const openClaimModal = (deal) => {
+    setSelectedDeal(deal);
+    setSurplusQuantity(1);
+    setIsModalOpen(true);
+  };
+
+  const handleConfirmClaim = () => {
+    if (!selectedDeal) return;
+
+    const claimedQty = surplusQuantity;
+    const pointsEarned = claimedQty * 50;
+
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith("deals_")) {
+        let ownerDeals = JSON.parse(localStorage.getItem(key)) || [];
+        const dealIndex = ownerDeals.findIndex(d => d.id === selectedDeal.id);
+        
+        if (dealIndex !== -1) {
+          let currentQty = parseInt(ownerDeals[dealIndex].quantity) || 5;
+          currentQty -= claimedQty;
+          
+          if (currentQty <= 0) {
+            ownerDeals.splice(dealIndex, 1); 
+          } else {
+            ownerDeals[dealIndex].quantity = currentQty; 
+          }
+          localStorage.setItem(key, JSON.stringify(ownerDeals));
+          break;
+        }
+      }
+    }
+
+    setAvailableDeals(prevDeals => prevDeals.map(d => {
+      if (d.id === selectedDeal.id) {
+        return { ...d, quantity: d.quantity - claimedQty };
+      }
+      return d;
+    }).filter(d => d.quantity > 0));
+
+    const newHistoryItem = {
+      id: Date.now(),
+      item: `${claimedQty}x ${selectedDeal.item}`, 
+      cafe: selectedDeal.cafeName,
+      date: new Date().toLocaleDateString(),
+      pointsEarned: pointsEarned
+    };
+    const updatedHistory = [newHistoryItem, ...history];
+    setHistory(updatedHistory);
+    localStorage.setItem(`history_${userName}`, JSON.stringify(updatedHistory));
+
+    const newPoints = points + pointsEarned;
+    setPoints(newPoints);
+    localStorage.setItem(`points_${userName}`, newPoints);
+
+    alert(`🎉 Success! You saved ${claimedQty} portion(s) and earned +${pointsEarned} Eco Points.`);
+    setIsModalOpen(false);
+    setSelectedDeal(null);
+  };
+
+  const handleRemoveCafe = (cafeId) => {
+    const updatedCafes = savedCafes.filter(c => c.id !== cafeId);
+    setSavedCafes(updatedCafes);
+    localStorage.setItem(`saved_${userName}`, JSON.stringify(updatedCafes));
+  };
+
+  // 🟢 NAYA FIX: Jab tak session verify na ho, screen par error na dikhe
+  if (status === "loading" || !userName) return null;
 
   return (
     <div style={styles.pageContainer}>
       <Navbar />
-      
+
       <div style={styles.contentWrapper}>
-        {/* TOP USER PROFILE HEADER */}
-        <div style={styles.headerCard}>
-          <div style={styles.profileInfo}>
-            <img 
-              src={user?.image || "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"} 
-              alt="Profile" 
-              style={styles.avatar} 
-            />
-            <div style={styles.nameSection}>
-              <h1 style={styles.userName}>Welcome back, {user?.name?.split(' ')[0]}! 👋</h1>
-              <p style={styles.userEmail}>{user?.email}</p>
-            </div>
-          </div>
-          <div style={styles.ecoBadge}>
-            <span style={styles.badgeIcon}>🌱</span>
-            <div>
-              <p style={styles.badgeLabel}>Eco Points</p>
-              <p style={styles.badgeValue}>120 Points</p>
-            </div>
-          </div>
-        </div>
-
-        {/* QUICK ACTION SECTION */}
-        <div style={styles.quickActionCard}>
-          <div style={styles.quickActionContent}>
-            <div>
-              <h2 style={styles.quickActionTitle}>🌿 Ready to Explore?</h2>
-              <p style={styles.quickActionText}>Discover sustainable cafes near you, make bookings, and claim surplus food!</p>
-            </div>
-            <button onClick={() => router.push("/")} style={styles.quickActionBtn}>Browse Cafes →</button>
-          </div>
-        </div>
-
-        {/* QUICK STATS CARDS */}
-        <div style={styles.statsGrid}>
-          <div style={styles.statCard}>
-            <p style={styles.statLabel}>Total Bookings</p>
-            <p style={styles.statValue}>0</p>
-          </div>
-          <div style={styles.statCard}>
-            <p style={styles.statLabel}>Total Spent</p>
-            <p style={styles.statValue}>₹0</p>
-          </div>
-          <div style={styles.statCard}>
-            <p style={styles.statLabel}>Food Items Saved</p>
-            <p style={styles.statValue}>0</p>
-          </div>
-        </div>
-
-        {/* MAIN DASHBOARD CONTENT WITH TABS */}
-        <div style={styles.mainCard}>
-          <div style={styles.tabBar}>
-            <button 
-              onClick={() => setActiveTab("overview")} 
-              style={activeTab === "overview" ? styles.activeTab : styles.tab}
-            >
-              📊 Overview
+        <div style={styles.dashboardContainer}>
+          
+          {activeTab !== "home" && (
+            <button onClick={() => router.push("/user-dashboard?tab=home")} style={styles.backBtn}>
+              ← Back to Profile
             </button>
-            <button 
-              onClick={() => setActiveTab("history")} 
-              style={activeTab === "history" ? styles.activeTab : styles.tab}
-            >
-              📜 Booking History
-            </button>
-            <button 
-              onClick={() => setActiveTab("impact")} 
-              style={activeTab === "impact" ? styles.activeTab : styles.tab}
-            >
-              🌎 My Eco Impact
-            </button>
-          </div>
+          )}
 
-          <div style={styles.tabContent}>
-            {activeTab === "overview" && (
-              <div style={styles.emptyState}>
-                <img src="https://cdn-icons-png.flaticon.com/512/7486/7486744.png" style={styles.emptyIcon} />
-                <h3 style={styles.emptyStateTitle}>No recent activity yet!</h3>
-                <p style={styles.emptyStateText}>Start your sustainable journey by exploring cafes near you. Book a table or claim surplus food to make a difference!</p>
+          {activeTab === "home" && (
+            <>
+              <div style={styles.profileHeader}>
+                <div style={styles.avatar}>
+                  {userName ? userName.charAt(0).toUpperCase() : "U"}
+                </div>
+                <h2 style={styles.userName}>{userName}</h2>
+                <div style={styles.pointsBadge}>⭐ {points} Eco Points</div>
               </div>
-            )}
-            
-            {activeTab === "history" && (
-              <div style={styles.emptyState}>
-                <img src="https://cdn-icons-png.flaticon.com/512/7486/7486744.png" style={styles.emptyIcon} />
-                <h3 style={styles.emptyStateTitle}>No bookings yet!</h3>
-                <p style={styles.emptyStateText}>Your booking history will appear here once you reserve a table or claim surplus food at any of our partner cafes.</p>
-              </div>
-            )}
 
-            {activeTab === "impact" && (
-              <div style={styles.impactBox}>
-                <h3 style={styles.impactTitle}>🌍 You're Making a Real Difference!</h3>
-                <p style={styles.impactText}>By using EcoKafe, you've helped save <strong>0 meals</strong> from waste and reduced <strong>0kg of CO2</strong> emissions. Every action counts towards a sustainable future!</p>
-                <div style={styles.progressBar}><div style={{...styles.progress, width: "10%"}}></div></div>
+              <div style={styles.menuCard}>
+                <button style={styles.menuItem} onClick={() => router.push("/")}>
+                  <div style={styles.iconBox}>🔍</div>
+                  <div style={styles.menuText}>
+                    <strong style={styles.menuTitle}>Explore Cafes</strong>
+                    <span style={styles.menuSub}>Find sustainable spots near you</span>
+                  </div>
+                  <span style={styles.arrow}>➔</span>
+                </button>
+
+                <button style={styles.menuItem} onClick={() => router.push("/surplus-alerts")}>
+                  <div style={styles.iconBox}>🍱</div>
+                  <div style={styles.menuText}>
+                    <strong style={styles.menuTitle}>Live Surplus Deals</strong>
+                    <span style={styles.menuSub}>Grab discounted food & save waste</span>
+                  </div>
+                  <span style={styles.badge}>{availableDeals.length} New</span>
+                </button>
+
+                <button style={styles.menuItem} onClick={() => router.push("/user-dashboard?tab=saved")}>
+                  <div style={styles.iconBox}>💚</div>
+                  <div style={styles.menuText}>
+                    <strong style={styles.menuTitle}>Saved Cafes</strong>
+                    <span style={styles.menuSub}>Your favorite eco-friendly spots</span>
+                  </div>
+                  <span style={styles.arrow}>➔</span>
+                </button>
+
+                <button style={{ ...styles.menuItem, borderBottom: "none" }} onClick={() => router.push("/user-dashboard?tab=history")}>
+                  <div style={styles.iconBox}>📜</div>
+                  <div style={styles.menuText}>
+                    <strong style={styles.menuTitle}>Activity & History</strong>
+                    <span style={styles.menuSub}>Track your past orders and impact</span>
+                  </div>
+                  <span style={styles.arrow}>➔</span>
+                </button>
               </div>
-            )}
-          </div>
+            </>
+          )}
+
+          {activeTab === "deals" && (
+            <div style={styles.tabSection}>
+              <h2 style={styles.sectionTitle}>🍱 Active Food Alerts</h2>
+              {availableDeals.length === 0 ? (
+                <div style={styles.emptyState}>No active deals right now. Check back later!</div>
+              ) : (
+                availableDeals.map(deal => (
+                  <div key={deal.id} style={styles.dealCard}>
+                    <div style={styles.dealHeader}>
+                      <div>
+                        
+                        <h3 style={styles.dealItem}>
+                          {deal.item} 
+                          <span style={styles.dealQuantity}>
+                            {deal.quantity} Left
+                          </span>
+                        </h3>
+
+                        <div style={styles.dealMetaContainer}>
+                          <p onClick={() => router.push(`/cafe/${deal.cafeName}`)} style={styles.dealCafe}>
+                            📍 {deal.cafeName}
+                          </p>
+                          <p style={styles.dealTime}>
+                            🕒 Published at {deal.time || "Recently"}
+                          </p>
+                        </div>
+
+                      </div>
+                      <span style={styles.discountBadge}>{deal.discount}</span>
+                    </div>
+                    <button onClick={() => openClaimModal(deal)} style={styles.claimBtn}>
+                      Claim & Save Food
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
+          {activeTab === "saved" && (
+            <div style={styles.tabSection}>
+              <h2 style={styles.sectionTitle}>💚 My Saved Cafes</h2>
+              {savedCafes.length === 0 ? (
+                <div style={styles.emptyState}>You haven't saved any cafes yet.</div>
+              ) : (
+                savedCafes.map(cafe => (
+                  <div key={cafe.id} style={styles.savedCard}>
+                    <div>
+                      <strong onClick={() => router.push(`/cafe/${cafe.name}`)} style={styles.savedName}>
+                        {cafe.name}
+                      </strong>
+                      <span style={styles.savedScore}>⭐ Eco Score: {cafe.score}</span>
+                    </div>
+                    <button onClick={() => handleRemoveCafe(cafe.id)} style={styles.removeBtn}>
+                      Remove
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
+          {activeTab === "history" && (
+            <div style={styles.tabSection}>
+              <h2 style={styles.sectionTitle}>📜 My Impact History</h2>
+              {history.length === 0 ? (
+                <div style={styles.emptyState}>No activity yet. Start claiming deals to save the planet!</div>
+              ) : (
+                history.map(item => (
+                  <div key={item.id} style={styles.historyCard}>
+                    <div>
+                      <h4 style={styles.historyItem}>{item.item}</h4>
+                      <p style={styles.historyMeta}>{item.cafe} • {item.date}</p>
+                    </div>
+                    <span style={styles.pointsGained}>+{item.pointsEarned} Pts</span>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
         </div>
       </div>
-
       <Footer />
+
+      {isModalOpen && selectedDeal && (
+        <div style={styles.modalOverlay}>
+          <div style={styles.modalBox}>
+            <div style={styles.modalIcon}>🍱</div>
+            <h2 style={styles.modalTitle}>Select Quantity</h2>
+            <p style={styles.modalText}>How many portions of <strong>{selectedDeal.item}</strong> would you like to claim?</p>
+            
+            <div style={styles.quantityContainer}>
+              <button 
+                onClick={() => setSurplusQuantity(prev => Math.max(1, prev - 1))} 
+                style={styles.qtyBtn}
+              >
+                −
+              </button>
+              <span style={styles.qtyNumber}>{surplusQuantity}</span>
+              <button 
+                onClick={() => setSurplusQuantity(prev => Math.min(selectedDeal.quantity, prev + 1))} 
+                style={styles.qtyBtn}
+              >
+                +
+              </button>
+            </div>
+            <p style={{ color: "#94a3b8", fontSize: "0.85rem", marginTop: "-10px", marginBottom: "25px" }}>
+              Max {selectedDeal.quantity} available
+            </p>
+
+            <div style={styles.modalActions}>
+              <button onClick={() => setIsModalOpen(false)} style={styles.cancelBtn}>Cancel</button>
+              <button onClick={handleConfirmClaim} style={styles.confirmBtn}>
+                Claim {surplusQuantity} Item(s)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
 
+export default function UserDashboard() {
+  return (
+    <Suspense fallback={<div style={{ textAlign: "center", padding: "100px", fontSize: "1.2rem", color: "#00bfa5", marginTop: "100px" }}>Loading your dashboard... 🌿</div>}>
+      <DashboardContent />
+    </Suspense>
+  );
+}
+
 const styles = {
-  pageContainer: { minHeight: "100vh", background: "linear-gradient(135deg, #f8fafc 0%, #ecf9f7 100%)", display: "flex", flexDirection: "column" },
-  contentWrapper: { flex: 1, maxWidth: "1100px", margin: "0 auto", padding: "110px 20px 50px 20px", width: "100%", boxSizing: "border-box" },
-  headerCard: { background: "linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%)", padding: "30px", borderRadius: "24px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 10px 30px rgba(0, 191, 165, 0.08)", marginBottom: "30px", border: "2px solid rgba(0, 191, 165, 0.1)", backdropFilter: "blur(10px)" },
-  profileInfo: { display: "flex", alignItems: "center", gap: "20px" },
-  avatar: { width: "75px", height: "75px", borderRadius: "50%", border: "3px solid #00bfa5", boxShadow: "0 8px 20px rgba(0, 191, 165, 0.2)", objectFit: "cover" },
-  nameSection: { display: "flex", flexDirection: "column", gap: "5px" },
-  userName: { margin: 0, fontSize: "1.3rem", color: "#0f172a", fontWeight: "700", letterSpacing: "-0.3px" },
-  userEmail: { margin: 0, color: "#64748b", fontSize: "0.85rem", fontWeight: "500" },
-  ecoBadge: { background: "linear-gradient(135deg, #dcfce7 0%, #ccfbf1 100%)", padding: "15px 22px", borderRadius: "18px", display: "flex", alignItems: "center", gap: "14px", border: "2px solid #86efac", boxShadow: "0 8px 20px rgba(0, 191, 165, 0.15)" },
-  badgeIcon: { fontSize: "2rem", display: "flex", alignItems: "center" },
-  badgeLabel: { margin: 0, color: "#166534", fontSize: "0.75rem", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.3px" },
-  badgeValue: { margin: 0, color: "#15803d", fontSize: "1.2rem", fontWeight: "800" },
-  quickActionCard: { background: "linear-gradient(135deg, #00bfa5 0%, #00897b 100%)", borderRadius: "20px", padding: "32px 35px", marginBottom: "32px", boxShadow: "0 15px 40px rgba(0, 191, 165, 0.3)", border: "2px solid rgba(255, 255, 255, 0.2)" },
-  quickActionContent: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "30px" },
-  quickActionTitle: { margin: "0 0 12px 0", fontSize: "1.3rem", fontWeight: "800", color: "#ffffff", letterSpacing: "-0.3px" },
-  quickActionText: { margin: 0, fontSize: "0.95rem", color: "#ffffff", fontWeight: "600", lineHeight: "1.6", maxWidth: "450px" },
-  quickActionBtn: { background: "white", color: "#00bfa5", padding: "14px 35px", borderRadius: "12px", border: "none", fontWeight: "800", cursor: "pointer", fontSize: "0.95rem", transition: "all 0.3s ease", boxShadow: "0 8px 25px rgba(0, 0, 0, 0.2)", whiteSpace: "nowrap", textTransform: "uppercase", letterSpacing: "0.5px" },
-  statsGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "18px", marginBottom: "30px" },
-  statCard: { background: "linear-gradient(135deg, #ffffff 0%, #fafafa 100%)", padding: "25px", borderRadius: "20px", textAlign: "center", boxShadow: "0 6px 20px rgba(0,0,0,0.05)", border: "1px solid #f1f5f9", transition: "all 0.3s ease", cursor: "pointer", position: "relative", overflow: "hidden" },
-  statCardHover: { transform: "translateY(-5px)", boxShadow: "0 12px 30px rgba(0, 191, 165, 0.15)", borderColor: "#ccfbf1" },
-  statLabel: { color: "#64748b", fontSize: "0.85rem", marginBottom: "10px", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.2px" },
-  statValue: { color: "#0f172a", fontSize: "1.6rem", fontWeight: "800", margin: 0, background: "linear-gradient(135deg, #00bfa5 0%, #00897b 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" },
-  mainCard: { background: "#ffffff", borderRadius: "24px", overflow: "hidden", boxShadow: "0 10px 30px rgba(0,0,0,0.08)", border: "1px solid #f1f5f9", padding: "25px" },
-  tabBar: { display: "flex", borderBottom: "none", backgroundColor: "#f0fdf4", padding: "8px 10px", gap: "10px", borderRadius: "12px", marginBottom: "20px", boxShadow: "inset 0 2px 8px rgba(0, 191, 165, 0.05)" },
-  tab: { flex: 1, padding: "11px 14px", borderRadius: "10px", borderTop: "none", borderLeft: "none", borderRight: "none", borderBottom: "none", background: "linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)", cursor: "pointer", color: "#64748b", fontWeight: "700", fontSize: "0.88rem", transition: "all 0.25s ease", position: "relative", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", border: "none" },
-  activeTab: { color: "#ffffff", background: "linear-gradient(135deg, #00bfa5 0%, #00897b 100%)", borderRadius: "10px", borderTop: "none", borderLeft: "none", borderRight: "none", borderBottom: "none", fontWeight: "700", boxShadow: "0 6px 15px rgba(0, 191, 165, 0.35)", border: "none" },
-  tabContent: { padding: "30px 15px", minHeight: "300px", display: "flex", flexDirection: "column", justifyContent: "center" },
-  emptyState: { display: "flex", flexDirection: "column", alignItems: "center", gap: "20px" },
-  emptyIcon: { width: "80px", height: "80px", opacity: 0.6, filter: "drop-shadow(0 4px 10px rgba(0, 191, 165, 0.1))" },
-  emptyStateTitle: { fontSize: "1.1rem", fontWeight: "700", color: "#0f172a", margin: 0 },
-  emptyStateText: { fontSize: "0.9rem", color: "#64748b", margin: 0, maxWidth: "400px", textAlign: "center", lineHeight: "1.5" },
-  exploreBtn: { background: "linear-gradient(135deg, #00bfa5 0%, #00897b 100%)", color: "white", padding: "12px 28px", borderRadius: "12px", border: "none", fontWeight: "700", marginTop: "15px", cursor: "pointer", fontSize: "0.85rem", transition: "all 0.3s ease", boxShadow: "0 8px 20px rgba(0, 191, 165, 0.3)", textTransform: "uppercase", letterSpacing: "0.4px" },
-  exploreBtnHover: { transform: "translateY(-3px)", boxShadow: "0 12px 30px rgba(0, 191, 165, 0.4)" },
-  impactBox: { background: "linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)", padding: "30px", borderRadius: "20px", textAlign: "left", border: "2px solid #a7f3d0", boxShadow: "0 8px 20px rgba(0, 191, 165, 0.1)" },
-  impactTitle: { fontSize: "1.1rem", fontWeight: "800", color: "#059669", margin: "0 0 12px 0" },
-  impactText: { fontSize: "0.9rem", color: "#047857", margin: 0, lineHeight: "1.6", fontWeight: "500" },
-  progressBar: { height: "10px", backgroundColor: "#a7f3d0", borderRadius: "10px", marginTop: "18px", overflow: "hidden", boxShadow: "inset 0 2px 4px rgba(0, 0, 0, 0.1)" },
-  progress: { height: "100%", backgroundColor: "linear-gradient(90deg, #00bfa5, #059669)", borderRadius: "12px", transition: "width 0.5s ease" },
-  loader: { minHeight: "100vh", display: "flex", justifyContent: "center", alignItems: "center", fontSize: "1.2rem", color: "#00bfa5", fontWeight: "bold" }
+  pageContainer: { minHeight: "100vh", display: "flex", flexDirection: "column", backgroundColor: "#f4f7f6", fontFamily: "'Inter', sans-serif" },
+  contentWrapper: { flex: 1, padding: "100px 20px 60px 20px" },
+  dashboardContainer: { maxWidth: "650px", margin: "0 auto", width: "100%" },
+  backBtn: { background: "white", color: "#00bfa5", border: "1px solid #00bfa5", padding: "8px 16px", borderRadius: "20px", cursor: "pointer", fontWeight: "bold", fontSize: "0.95rem", marginBottom: "25px", display: "inline-flex", alignItems: "center", transition: "all 0.2s" },
+  profileHeader: { textAlign: "center", marginBottom: "40px", backgroundColor: "white", padding: "40px", borderRadius: "24px", boxShadow: "0 10px 30px rgba(0,0,0,0.05)" },
+  avatar: { width: "85px", height: "85px", borderRadius: "50%", backgroundColor: "#00bfa5", color: "white", fontSize: "2.5rem", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 15px auto", border: "4px solid #f0fdfa", boxShadow: "0 10px 20px rgba(0, 191, 165, 0.2)" },
+  userName: { color: "#0f172a", margin: "0 0 10px 0", fontSize: "1.8rem", fontWeight: "800", letterSpacing: "-0.5px" },
+  pointsBadge: { display: "inline-block", backgroundColor: "#fef3c7", color: "#d97706", padding: "8px 20px", borderRadius: "30px", fontWeight: "800", fontSize: "1.1rem", boxShadow: "0 4px 10px rgba(217, 119, 6, 0.15)" },
+  menuCard: { backgroundColor: "white", borderRadius: "24px", boxShadow: "0 10px 30px rgba(0,0,0,0.05)", overflow: "hidden" },
+  menuItem: { width: "100%", display: "flex", alignItems: "center", padding: "20px 25px", backgroundColor: "white", border: "none", borderBottom: "1px solid #f1f5f9", cursor: "pointer", transition: "background 0.2s", textAlign: "left" },
+  iconBox: { width: "45px", height: "45px", borderRadius: "12px", backgroundColor: "#f8fafc", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.3rem" },
+  menuText: { flex: 1, marginLeft: "15px" },
+  menuTitle: { display: "block", color: "#0f172a", fontSize: "1.1rem", fontWeight: "700", marginBottom: "3px" },
+  menuSub: { color: "#64748b", fontSize: "0.9rem" },
+  arrow: { color: "#cbd5e1", fontSize: "1.2rem", fontWeight: "bold" },
+  badge: { backgroundColor: "#f5a623", color: "white", padding: "4px 12px", borderRadius: "20px", fontSize: "0.85rem", fontWeight: "bold" },
+  tabSection: { animation: "fadeIn 0.3s ease" },
+  sectionTitle: { color: "#0f172a", marginBottom: "25px", fontSize: "1.6rem", fontWeight: "800", display: "flex", alignItems: "center", gap: "10px" },
+  emptyState: { textAlign: "center", color: "#64748b", backgroundColor: "white", padding: "40px", borderRadius: "20px", fontSize: "1rem", boxShadow: "0 10px 30px rgba(0,0,0,0.05)" },
+  
+  dealCard: { backgroundColor: "white", padding: "22px 25px", borderRadius: "16px", boxShadow: "0 8px 25px rgba(0,0,0,0.04)", border: "1px solid #e2e8f0", borderLeft: "6px solid #00bfa5", marginBottom: "20px" },
+  dealHeader: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "18px" },
+  dealItem: { margin: "0 0 10px 0", color: "#0f172a", fontSize: "1.25rem", fontWeight: "800", display: "flex", alignItems: "center", flexWrap: "wrap", gap: "10px" },
+  dealQuantity: { fontSize: "1rem", color: "#d97706", backgroundColor: "#fef3c7", padding: "4px 12px", borderRadius: "10px", fontWeight: "800", display: "inline-block" },
+  dealMetaContainer: { display: "flex", flexDirection: "column", gap: "4px" },
+  dealCafe: { margin: 0, color: "#475569", fontSize: "0.95rem", fontWeight: "600", cursor: "pointer", textDecoration: "underline", display: "inline-block" },
+  dealTime: { margin: 0, color: "#94a3b8", fontSize: "0.85rem", fontWeight: "500" },
+  discountBadge: { backgroundColor: "#fee2e2", color: "#ef4444", padding: "6px 12px", borderRadius: "10px", fontWeight: "800", fontSize: "0.9rem" },
+  claimBtn: { width: "100%", padding: "14px", backgroundColor: "#00bfa5", color: "white", border: "none", borderRadius: "12px", fontWeight: "800", cursor: "pointer", fontSize: "1.05rem", boxShadow: "0 4px 12px rgba(0, 191, 165, 0.25)", transition: "transform 0.1s" },
+  
+  savedCard: { display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "white", padding: "20px 25px", borderRadius: "20px", boxShadow: "0 10px 30px rgba(0,0,0,0.05)", marginBottom: "15px" },
+  savedName: { display: "block", color: "#0f172a", fontSize: "1.15rem", cursor: "pointer", fontWeight: "800", textDecoration: "underline", marginBottom: "5px" },
+  savedScore: { color: "#00bfa5", fontSize: "0.95rem", fontWeight: "700" },
+  removeBtn: { background: "#fee2e2", color: "#ef4444", border: "none", padding: "10px 16px", borderRadius: "10px", cursor: "pointer", fontWeight: "700", fontSize: "0.9rem" },
+  historyCard: { display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "white", padding: "20px 25px", borderRadius: "20px", boxShadow: "0 10px 30px rgba(0,0,0,0.05)", marginBottom: "15px", borderLeft: "6px solid #00bfa5" },
+  historyItem: { margin: "0 0 5px 0", color: "#0f172a", fontSize: "1.1rem", fontWeight: "700" },
+  historyMeta: { margin: 0, color: "#64748b", fontSize: "0.9rem" },
+  pointsGained: { backgroundColor: "#f0fdfa", color: "#00bfa5", border: "1px solid #ccfbf1", padding: "8px 14px", borderRadius: "20px", fontWeight: "800", fontSize: "0.95rem" },
+  
+  modalOverlay: { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 },
+  modalBox: { backgroundColor: "white", padding: "40px", borderRadius: "24px", width: "90%", maxWidth: "450px", textAlign: "center", boxShadow: "0 25px 50px rgba(0,0,0,0.15)", animation: "fadeIn 0.3s ease" },
+  modalIcon: { fontSize: "3rem", marginBottom: "15px" },
+  modalTitle: { margin: "0 0 15px 0", color: "#1e293b", fontSize: "1.6rem", fontWeight: "800" },
+  modalText: { color: "#64748b", lineHeight: "1.6", marginBottom: "20px", fontSize: "1.05rem" },
+  quantityContainer: { display: "flex", justifyContent: "center", alignItems: "center", gap: "20px", marginBottom: "20px" },
+  qtyBtn: { width: "40px", height: "40px", borderRadius: "50%", border: "none", backgroundColor: "#f1f5f9", fontSize: "1.4rem", fontWeight: "bold", color: "#334155", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.2s" },
+  qtyNumber: { fontSize: "1.6rem", fontWeight: "800", color: "#1e293b", minWidth: "30px" },
+  modalActions: { display: "flex", gap: "15px", justifyContent: "center" },
+  cancelBtn: { flex: 1, backgroundColor: "#f1f5f9", color: "#475569", border: "none", padding: "12px", borderRadius: "12px", fontSize: "1rem", fontWeight: "bold", cursor: "pointer" },
+  confirmBtn: { flex: 1, backgroundColor: "#f5a623", color: "white", border: "none", padding: "12px", borderRadius: "12px", fontSize: "1rem", fontWeight: "bold", cursor: "pointer", boxShadow: "0 4px 10px rgba(245, 166, 35, 0.3)" }
 };
